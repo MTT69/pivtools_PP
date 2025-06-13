@@ -52,7 +52,7 @@ setup.pipeline = struct( ...
     'RPCA_split', false,... % Perform RPCA infilling on top and bottom of image
     'SPOD', false,... % Perform SPOD analysis
     'POST_POD', false,... % Perform POST POD analysis
-    'pressure_reconstruction', false... % Perform pressure reconstruction
+    'pressure_reconstruction', true... % Perform pressure reconstruction
 );
 
 
