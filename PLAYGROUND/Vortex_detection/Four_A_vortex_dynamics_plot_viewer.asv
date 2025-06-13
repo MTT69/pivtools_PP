@@ -1,0 +1,146 @@
+close all;
+clear variables;
+
+% (Set N to the same value you used when processing the results.)
+N = 18000;
+
+% List of base directories (adjust the paths as needed)
+base_dirs = { ...
+%     'E:\Full\Processed_PIV_validation\90degree_400light_100hz_3000dt', ...
+%     'E:\Full\Processed_PIV_validation\90degree_250light_250hz_1000dt', ...
+%     'E:\Full\Processed_PIV_validation\60degree_400light_100hz_3000dt_reverse', ...
+%     'E:\Full\Processed_PIV_validation\60degree_250light_250hz_1000dt_reverse', ...
+%     'E:\Full\Processed_PIV_validation\60degree_400light_100hz_3000dt', ...
+%     'E:\Full\Processed_PIV_validation\60degree_250light_250hz_1000dt', ...
+    'E:\Full\Processed_PIV_validation\30degree_400light_100hz_3000dt_reverse', ...
+%     'E:\Full\Processed_PIV_validation\30degree_250light_250hz_1000dt_reverse', ...
+%     'E:\Full\Processed_PIV_validation\30degree_400light_100hz_3000dt', ...
+%     'E:\Full\Processed_PIV_validation\30degree_250light_250hz_1000dt' ...
+};
+
+% List of figure filenames to process
+fig_files = { ...
+    'Autocorrelation_vflux1.fig', ...
+    'Autocorrelation_vflux11.fig', ...
+    'Autocorrelation_vortexCenterY_1.fig', ...
+    'Autocorrelation_vortexCenterY_2.fig', ...
+    'Autocorrelation_vortexSize1.fig',...
+    'Autocorrelation_vortexSize2.fig',...
+    'Autocorrelation_convective velocity1.fig',...
+    'Autocorrelation_convective velocity11.fig',...
+    'Autocorrelation_delta_star1.fig',...
+    'Autocorrelation_delta_star2.fig',...
+    'Autocorrelation_rotationRate1.fig',...
+    'Autocorrelation_rotationRate2.fig',...
+    'Autocorrelation_Momentum thickness1.fig',...
+    'Autocorrelation_Momentum thickness1.fig',...
+    'vortex_break_down_05000.fig', ...
+    'vortex_break_down_15000.fig' ...
+};
+
+% Loop over each base directory
+for base_idx = 1:length(base_dirs)
+    base_dir = base_dirs{base_idx};
+    disp(['Processing base directory ' num2str(base_idx) ' of ' num2str(length(base_dirs))]);
+    % Construct the path to the Statistics folder (adjust subfolder names as needed)
+    statistics_dir = fullfile(base_dir, 'Statistics', num2str(N), 'Cam1', 'Instantaneous', 'Calibrated');
+    data = load(fullfile(statistics_dir,'cavity_stats.mat'));
+    disp(['Vortex 1 rotation rate rev/s: ', num2str(mean(data.rotation_all(:,1), 'omitnan'))])
+    disp(['Vortex 2 rotation rate rev/s: ', num2str(mean(data.rotation_all(:,2), 'omitnan'))])
+
+    
+    % Extract sampling rate from the base directory name (assumes folder name contains a string like "100hz")
+    [~, baseString, ~] = fileparts(base_dir);
+    hz_str = regexp(baseString, '\d+hz', 'match');
+    if ~isempty(hz_str)
+        % Remove the 'hz' and convert to number
+        sampling_rate = str2double(hz_str{1}(1:end-2));
+    else
+        warning('Could not determine sampling rate from directory name. Using default sampling rate 100 Hz.');
+        sampling_rate = 100;
+    end
+    
+    frequencies = struct();
+    frequencies.names = fig_files;
+    
+    % Loop over each .fig file in the list
+    for fig_idx = 1:length(fig_files)
+        fig_path = fullfile(statistics_dir, fig_files{fig_idx});
+        if exist(fig_path, 'file')
+            % Open the figure (in a new window)
+            fig_handle = openfig(fig_path, 'new');
+            
+            % Find all axes objects in the figure
+            ax_handles = findall(fig_handle, 'Type', 'axes');
+            for a = 1:length(ax_handles)
+                ax = ax_handles(a);
+                titleHandle = get(ax, 'Title');
+                titleStr = get(titleHandle, 'String');
+                
+                % Check if the title contains the word "Autocorrelation" (case insensitive)
+                if contains(lower(titleStr), 'autocorrelation')
+                    % Look for a line object (assumes the autocorrelation data was plotted as a line)
+                    line_handle = findobj(ax, 'Type', 'line');
+                    if ~isempty(line_handle)
+                        % (Here we take the first line object; adjust if your figure has more than one.)
+                        lh = line_handle(1);
+                        xData = get(lh, 'XData');
+                        yData = get(lh, 'YData');
+                        
+                        % Restrict the analysis to the x-range [17000 19000] as in your original code
+                        idx_range = (xData >= 17000) & (xData <= 19000);
+                        if any(idx_range)
+                            xData_range = xData(idx_range);
+                            yData_range = yData(idx_range);
+                            
+                           
+                            [x, y] = ginput(2);
+                            locs = round(x);
+                            pks = y;
+                            
+                            % Check if the user pressed escape (selected points are too close)
+                            if length(locs) < 2 || abs(locs(2) - locs(1)) < 10
+                                locs = nan;
+                                pks = nan;
+                            end
+                            
+                            if length(locs) >= 2
+                                % Compute period lag from the first two detected peaks
+                                period_lag = locs(2) - locs(1);
+                                period_time = period_lag / sampling_rate;
+                                frequency = 1 / period_time;
+                                disp(frequency)
+                            else
+                                period_time = NaN;
+                                frequency = NaN;
+                            end
+                            frequencies
+                            % Create a new title string that appends period and frequency info
+                            newTitle = sprintf('%s - Period: %.2f s - Frequency: %.2f Hz', fig_files{fig_idx}, period_time, frequency);
+                            set(titleHandle, 'String', newTitle, 'FontSize', 30);
+                        else
+                            % If no data in the desired x-range, simply update the font size.
+                            set(titleHandle, 'FontSize', 30);
+                        end
+                    else
+                        % If no line is found, just update the title font size.
+                        set(titleHandle, 'FontSize', 30);
+                    end
+                else
+                    % For axes that do not have 'Autocorrelation' in their title,
+                    % you might still want to update the title font size.
+                    set(titleHandle, 'FontSize', 16);
+                end
+            end
+            
+            % Save the updated figure using the same file name (overwriting the old file)
+            saveas(fig_handle, fig_path);
+            disp(['Updated and saved figure: ' fig_files{fig_idx}]);
+            figure(1);
+            close(fig_handle);
+        else
+            warning(['File not found: ' fig_path]);
+        end
+    end
+end
+
