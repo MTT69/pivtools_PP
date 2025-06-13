@@ -23,7 +23,7 @@ function P = EU_FDM(X, Y, U, V, U_MEAN, V_MEAN, dUdt, dVdt, rho, nu)
 % Added unsteady terms instead of invoking Taylor's Hypothesis.
 
 %% USER DEFINED VARIABLES --------------------------------------------------
-dlet_BC = 1;        % 0. N-BC   1. Apply D-BC
+dlet_BC = 0;        % 0. N-BC   1. Apply D-BC
 % dlet_ind   = 	{sub2ind(size(U_MEAN)+1, n:m, p:q), [], [], ...};	% specify (n:m) & (p,q)
 % dlet_d     = 	{'north', [], [], ...};                             % boundary
 % dlet_value =	{0*ones(1,261), [], [], ...};                       % pressure values

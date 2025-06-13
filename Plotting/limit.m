@@ -1,4 +1,3 @@
-
 function [lower_limit, upper_limit, custommap]= limit(runs_stats, loop, variable,directory,variableName, type,dir)
     % [lower_limit, upper_limit, custommap] = limit(runs_stats, loop, variable, directory, variableName, type, dir)
     %
@@ -69,27 +68,87 @@ function [lower_limit, upper_limit, custommap]= limit(runs_stats, loop, variable
 
 
 if loop == runs_stats(1) && strcmp(type, 'Inst') || strcmp(type, 'New')
-    lower_limit = prctile(variable(:),1);
-    upper_limit = prctile(variable(:),99);
+    % Remove NaN values before calculating bounds
+    valid_variable = variable(~isnan(variable));
+    
+    if isempty(valid_variable)
+        % If all values are NaN, use default bounds
+        lower_limit = -1;
+        upper_limit = 1;
+    else
+        % Calculate symmetric bounds for multicolor maps
+        dataMin = min(valid_variable(:));
+        dataMax = max(valid_variable(:));
+        
+        if dataMin >= 0
+            % Only positive values
+            lower_limit = 0;
+            upper_limit = prctile(valid_variable(:), 99);
+        elseif dataMax <= 0
+            % Only negative values
+            lower_limit = prctile(valid_variable(:), 1);
+            upper_limit = 0;
+        else
+            % Both positive and negative: use symmetric bounds
+            maxAbsValue = max(abs([prctile(valid_variable(:), 1), prctile(valid_variable(:), 99)]));
+            lower_limit = -maxAbsValue;
+            upper_limit = maxAbsValue;
+        end
+    end
+    
     save(fullfile(directory, join([variableName,'displacementbounds.mat'],"")), 'lower_limit', 'upper_limit');
 elseif strcmp(type, 'Sum')
     try
         load(fullfile(dir, join([variableName,'displacementbounds.mat'],"")));
     catch
-        lower_limit = prctile(variable(:),1);
-        upper_limit = prctile(variable(:),99);
+        % Remove NaN values before calculating bounds
+        valid_variable = variable(~isnan(variable));
+        
+        if isempty(valid_variable)
+            % If all values are NaN, use default bounds
+            lower_limit = -1;
+            upper_limit = 1;
+        else
+            % Calculate symmetric bounds for multicolor maps
+            dataMin = min(valid_variable(:));
+            dataMax = max(valid_variable(:));
+            
+            if dataMin >= 0
+                % Only positive values
+                lower_limit = 0;
+                upper_limit = prctile(valid_variable(:), 99);
+            elseif dataMax <= 0
+                % Only negative values
+                lower_limit = prctile(valid_variable(:), 1);
+                upper_limit = 0;
+            else
+                % Both positive and negative: use symmetric bounds
+                maxAbsValue = max(abs([prctile(valid_variable(:), 1), prctile(valid_variable(:), 99)]));
+                lower_limit = -maxAbsValue;
+                upper_limit = maxAbsValue;
+            end
+        end
+        
         save(fullfile(directory, join([variableName,'displacementbounds.mat'],"")), 'lower_limit', 'upper_limit');
     end
 else
     load(fullfile(directory, join([variableName,'displacementbounds.mat'],"")));
 end
 
-if lower_limit<0
-    custommap = redbluezero(lower_limit,upper_limit);
-    
+% Generate colormap based on bounds using othercolor('Spectral7')
+fullColormap = othercolor('Spectral7');
+blueToWhite = fullColormap(1:128,:);
+whiteToRed = fullColormap(129:end,:);
+
+if lower_limit < 0 && upper_limit > 0
+    % Both positive and negative values: use full colormap
+    custommap = fullColormap;
+elseif lower_limit >= 0
+    % Only positive values: use white to red
+    custommap = whiteToRed;
 else
-    custommap = whitebluezero(lower_limit,upper_limit);
-    
+    % Only negative values: use blue to white
+    custommap = blueToWhite;
 end
 
 end

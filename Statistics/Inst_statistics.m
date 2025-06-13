@@ -226,7 +226,7 @@ function Inst_statistics(setup,Type,CameraNo,endpoint)
             delete(j);
 
 
-%             %TODO only works for landscape imagery
+%             %TODO only works for square imagery
 %             figure('Visible', 'off')
 %             center_col = floor(size(mean_U, 2) / 2);
 %             half_width = floor(size(mean_U, 1) / 2);

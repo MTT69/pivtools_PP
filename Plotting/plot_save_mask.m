@@ -1,5 +1,3 @@
-
-
 function plot_save_mask(variable, mask,xcorners,ycorners,gcafontsize,titlefontsize,SaveLocation,runs_stats,wsize, loop, variableName,type,dir)
 % plot_save_mask(variable, mask, xcorners, ycorners, gcafontsize, titlefontsize, SaveLocation, runs_stats, wsize, loop, variableName, type, dir)
 %
@@ -64,13 +62,14 @@ function plot_save_mask(variable, mask,xcorners,ycorners,gcafontsize,titlefontsi
 %   plot_save_mask(velocity_data, mask, xcorners, ycorners, 12, 16, './plots', runs_stats, [32, 32], 1, 'Assimilated U', 'Inst', './');
 %
 % Notes:
-%   - The mask is applied by setting the corresponding values in the `variable` array to `inf`. 
+%   - The mask is applied by creating a combined mask of original mask and NaN values, then setting those values to NaN.
 %   - The `lower_limit` and `upper_limit` are chosen based on the type of variable (e.g., 'Assimilated U' or 'Peak Heights').
 %   - The `imagesc` function is used for both the variable and the mask to create visual representations of the data. 
-%     The `AlphaData` property ensures that only non-inf values are displayed in the variable plot and only the mask 
-%     is visible in the second plot.
+%     The `AlphaData` property ensures that only non-NaN values are displayed in the variable plot and masked areas
+%     are shown in gray in the background layer.
 %   - The figure is saved in three formats for compatibility with different software and use cases.
 %   - The function is designed to handle various variable types by adjusting the colormap and bounds dynamically.
+%   - LaTeX formatting is used for all text elements including tick labels, titles, and axis labels.
 %
 
 
@@ -88,7 +87,9 @@ elseif contains(variableName, 'err')
     upper_limit = 1;
     custommap = redbluezero(lower_limit, upper_limit);
 else
-    [lower_limit, upper_limit, custommap] = limit(runs_stats, loop, variable(mask==0), SaveLocation, variableName, type, dir);
+    % Use only valid (non-NaN and non-masked) data for limit calculation
+    valid_data = variable(mask==0 & ~isnan(variable));
+    [lower_limit, upper_limit, custommap] = limit(runs_stats, loop, valid_data, SaveLocation, variableName, type, dir);
     
     if lower_limit >= upper_limit || isinf(upper_limit) || lower_limit == upper_limit || (lower_limit <= 0 && upper_limit <= 0)
         lower_limit = -1;
@@ -96,55 +97,65 @@ else
     end
 end
 
-% Apply mask by setting masked values to NaN instead of Inf
-variable(mask) = NaN;
+% Create a combined mask: original mask OR NaN values
+combined_mask = mask | isnan(variable);
 
-% Convert mask to double and keep it binary (1 for masked, 0 for unmasked)
-mask = double(mask);
+% Apply combined mask by setting masked/NaN values to NaN
+variable(combined_mask) = NaN;
+
+% Convert combined mask to double for visualization
+mask_vis = double(combined_mask);
 
 % Create figure
 figure('Visible', 'off')
 fig = gcf;
 set(fig, 'Units', 'Normalized', 'OuterPosition', [0, 0.04, 1, 0.96]);
 
-% Main plot (Variable data)
+% Create variable data plot first (main layer)
 ax1 = axes;
 h = imagesc(xcorners, ycorners, variable, [lower_limit, upper_limit]);
 set(h, 'AlphaData', ~isnan(variable)); % Ensures NaNs are fully transparent
 set(gca, 'YDir', 'normal', 'FontSize', gcafontsize, 'LineWidth', 1.5, 'TickLabelInterpreter', 'latex');
-colormap(ax1, custommap);
+
+
+
+% Apply consistent colormap using othercolor('Spectral7') like plot_maker_instantaneous
+if ischar(custommap)
+    colormap(ax1, custommap);
+else
+    % Use the same colormap logic as plot_maker_instantaneous
+    fullColormap = othercolor('Spectral7');
+    blueToWhite = fullColormap(1:128,:);
+    whiteToRed = fullColormap(129:end,:);
+    
+    if lower_limit >= 0
+        % Only positive values: use white to red
+        colormap(ax1, whiteToRed);
+    elseif upper_limit <= 0
+        % Only negative values: use blue to white
+        colormap(ax1, blueToWhite);
+    else
+        % Both positive and negative: use full colormap
+        colormap(ax1, fullColormap);
+    end
+end
+
+% Hold on to add mask layer
+hold(ax1, 'on');
+
+% Create mask overlay with fixed light grey color (same as plot_maker_instantaneous)
+[rows, cols] = size(mask_vis);
+mask_rgb = cat(3, ones(rows, cols) * 0.8, ones(rows, cols) * 0.8, ones(rows, cols) * 0.8); % Light grey RGB
+
+% Display the mask as an RGB image overlay
+j = image(ax1, xcorners, ycorners, mask_rgb);
+set(j, 'AlphaData', mask_vis * 0.7); % Show masked areas with transparency
+
 colorbar;
 daspect(ax1, [1 1 1]);
 title(join([variableName, num2str(wsize(1,1)) 'x' num2str(wsize(1,2))], ""), 'FontSize', titlefontsize, 'Interpreter', 'latex');
 
-% Create a second set of axes for the mask
-ax2 = axes;
-j = imagesc(xcorners, ycorners, mask);
-set(j, 'AlphaData', mask); % Show masked areas
-set(gca, 'YDir', 'normal', 'FontSize', gcafontsize, 'LineWidth', 1.5, 'TickLabelInterpreter', 'latex');
-
-% Set colormap for the mask to black
-colormap(ax2, [0 0 0]); % Ensures the mask is black
-
-% Align axes
-linkaxes([ax1, ax2]);
-
-% Hide the second set of axes
-ax2.Visible = 'off';
-ax2.XTick = [];
-ax2.YTick = [];
-ax2.HitTest = 'off'; % Ignore mouse clicks on ax2
-ax2.PickableParts = 'none';
-
-% Set proper positioning of axes
-ax2.Position = ax1.Position;
-
-% Ensure consistent figure aspect ratio
-daspect([1 1 1]);
-
-% Remove extra space between plots
-ax1.XLim = ax2.XLim;
-ax1.YLim = ax2.YLim;
+hold(ax1, 'off');
 
 % Save the figure in multiple formats
 filename = fullfile(SaveLocation, join([variableName, num2str(wsize(1,1)), 'x', num2str(wsize(1,2))], ""));
@@ -156,6 +167,5 @@ saveas(fig, filename + ".fig");
 close(gcf);
 delete(h);
 delete(j);
-
 
 end
