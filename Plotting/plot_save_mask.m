@@ -1,5 +1,5 @@
-function plot_save_mask(variable, mask,xcorners,ycorners,gcafontsize,titlefontsize,SaveLocation,runs_stats,wsize, loop, variableName,type,dir)
-% plot_save_mask(variable, mask, xcorners, ycorners, gcafontsize, titlefontsize, SaveLocation, runs_stats, wsize, loop, variableName, type, dir)
+function varargout = plot_save_mask(variable, mask,xcorners,ycorners,gcafontsize,titlefontsize,SaveLocation,runs_stats,wsize, loop, variableName,type,dir, varargin)
+% plot_save_mask(variable, mask, xcorners, ycorners, gcafontsize, titlefontsize, SaveLocation, runs_stats, wsize, loop, variableName, type, dir, optional_lower_limit, optional_upper_limit, return_figure)
 %
 % This function generates and saves a plot visualizing a given variable on a grid, with a corresponding mask 
 % overlaid on top. The mask is used to hide certain areas of the variable, and a custom colormap is applied 
@@ -38,9 +38,15 @@ function plot_save_mask(variable, mask,xcorners,ycorners,gcafontsize,titlefontsi
 %
 %   dir            - Directory used for loading pre-saved displacement bounds if `type` is 'Sum'.
 %
+%   optional_lower_limit - (Optional) Manual override for lower colorbar limit
+%
+%   optional_upper_limit - (Optional) Manual override for upper colorbar limit
+%
+%   return_figure  - (Optional) Boolean flag. If true, returns figure handle instead of saving files
+%
 % Outputs:
-%   This function does not return any outputs. It saves the generated plot in three formats (JPG, EPS, and FIG) to 
-%   the specified `SaveLocation`.
+%   If return_figure is true: Returns figure handle
+%   Otherwise: Saves the generated plot in three formats (JPG, EPS, and FIG) to the specified `SaveLocation`.
 %
 % Description:
 %   - The function first determines appropriate displacement limits (`lower_limit` and `upper_limit`) and colormap 
@@ -73,19 +79,33 @@ function plot_save_mask(variable, mask,xcorners,ycorners,gcafontsize,titlefontsi
 %
 
 
-% Determine colormap and limits based on variable name
-if contains(variableName, 'Peak Heights', 'IgnoreCase', true)
-    lower_limit = 0;
-    upper_limit = 1;
-    custommap = 'parula';
-elseif strcmp(variableName, 'NaN Percentage')
-    lower_limit = 0;
-    upper_limit = 100;
-    custommap = 'parula';
-elseif contains(variableName, 'err')
-    lower_limit = -1;
-    upper_limit = 1;
-    custommap = redbluezero(lower_limit, upper_limit);
+% Parse optional inputs
+return_figure = false;
+use_optional_limits = false;
+
+if length(varargin) >= 3
+    optional_lower_limit = varargin{1};
+    optional_upper_limit = varargin{2};
+    return_figure = varargin{3};
+    use_optional_limits = true;
+elseif length(varargin) == 2
+    optional_lower_limit = varargin{1};
+    optional_upper_limit = varargin{2};
+    use_optional_limits = true;
+elseif length(varargin) == 1
+    if islogical(varargin{1})
+        return_figure = varargin{1};
+    else
+        error('Both optional_lower_limit and optional_upper_limit must be provided together');
+    end
+end
+
+% Determine colormap and limits based on variable name or optional inputs
+if use_optional_limits
+    lower_limit = optional_lower_limit;
+    upper_limit = optional_upper_limit;
+    % Use standard colormap for optional limits
+   
 else
     % Use only valid (non-NaN and non-masked) data for limit calculation
     valid_data = variable(mask==0 & ~isnan(variable));
@@ -106,8 +126,8 @@ variable(combined_mask) = NaN;
 % Convert combined mask to double for visualization
 mask_vis = double(combined_mask);
 
-% Create figure
-figure('Visible', 'off')
+figure('Visible', 'off');
+
 fig = gcf;
 set(fig, 'Units', 'Normalized', 'OuterPosition', [0, 0.04, 1, 0.96]);
 
@@ -119,26 +139,23 @@ set(gca, 'YDir', 'normal', 'FontSize', gcafontsize, 'LineWidth', 1.5, 'TickLabel
 
 
 
-% Apply consistent colormap using othercolor('Spectral7') like plot_maker_instantaneous
-if ischar(custommap)
-    colormap(ax1, custommap);
+
+% Use the same colormap logic as plot_maker_instantaneous
+fullColormap = othercolor('Spectral7');
+blueToWhite = fullColormap(1:128,:);
+whiteToRed = fullColormap(129:end,:);
+
+if lower_limit >= 0
+    % Only positive values: use white to red
+    colormap(ax1, whiteToRed);
+elseif upper_limit <= 0
+    % Only negative values: use blue to white
+    colormap(ax1, blueToWhite);
 else
-    % Use the same colormap logic as plot_maker_instantaneous
-    fullColormap = othercolor('Spectral7');
-    blueToWhite = fullColormap(1:128,:);
-    whiteToRed = fullColormap(129:end,:);
-    
-    if lower_limit >= 0
-        % Only positive values: use white to red
-        colormap(ax1, whiteToRed);
-    elseif upper_limit <= 0
-        % Only negative values: use blue to white
-        colormap(ax1, blueToWhite);
-    else
-        % Both positive and negative: use full colormap
-        colormap(ax1, fullColormap);
-    end
+    % Both positive and negative: use full colormap
+    colormap(ax1, fullColormap);
 end
+
 
 % Hold on to add mask layer
 hold(ax1, 'on');
@@ -153,19 +170,24 @@ set(j, 'AlphaData', mask_vis * 0.7); % Show masked areas with transparency
 
 colorbar;
 daspect(ax1, [1 1 1]);
-title(join([variableName, num2str(wsize(1,1)) 'x' num2str(wsize(1,2))], ""), 'FontSize', titlefontsize, 'Interpreter', 'latex');
+title(variableName, 'FontSize', titlefontsize, 'Interpreter', 'latex');
 
 hold(ax1, 'off');
 
-% Save the figure in multiple formats
-filename = fullfile(SaveLocation, join([variableName, num2str(wsize(1,1)), 'x', num2str(wsize(1,2))], ""));
-saveas(fig, filename + ".jpg");
-saveas(fig, filename + ".epsc");
-saveas(fig, filename + ".fig");
-
-% Close the figure and clean up
-close(gcf);
-delete(h);
-delete(j);
+% Return figure handle or save files
+if return_figure
+    varargout{1} = fig;
+else
+    % Save the figure in multiple formats
+    filename = fullfile(SaveLocation, join([variableName, num2str(wsize(1,1)), 'x', num2str(wsize(1,2))], ""));
+    saveas(fig, filename + ".jpg");
+    saveas(fig, filename + ".epsc");
+    saveas(fig, filename + ".fig");
+    
+    % Close the figure and clean up
+    close(gcf);
+    delete(h);
+    delete(j);
+end
 
 end

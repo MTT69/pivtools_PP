@@ -12,12 +12,12 @@ setup.directory = struct( ...
 );
 
 base_dir = { ...
-   'D:\Full\Processed_PIV_validation\90degree_400light_100hz_3000dt'
+   'D:\Full\Processed_PIV_validation\90degree_250light_250hz_1000dt'
 };
 
 run_instantaneous = [5];
 run_ensemble = [6];
-dt = {3000*10^(-6), 1000*10^(-6)}; % Time step in seconds for each run
+dt = {1000*10^(-6), 3000*10^(-6)}; % Time step in seconds for each run
 
 setup.environment = struct( ...
     'local', true, ... % Specify execution environment: true for local, false for cluster (See compilation readme)     
@@ -48,11 +48,18 @@ setup.pipeline = struct( ...
     'statistics_sum', false, ... % Generate instantaneous statistics
     'ensemble_cords', false, ... % edits ensemble coordinates
     'instantaneous_cords', false, ... % edits instantaneous coordinates
-    'RPCA', false,... % Perform RPCA infilling
-    'RPCA_split', false,... % Perform RPCA infilling on top and bottom of image
-    'SPOD', false,... % Perform SPOD analysis
     'POST_POD', false,... % Perform POST POD analysis
-    'pressure_reconstruction', true... % Perform pressure reconstruction
+    'pressure_reconstruction', false,... % Perform pressure reconstruction
+    'manual_plots', false, ... % Generate manual plots
+    'noise_floor', false, ... % Calculate noise floor
+    'batch_BL_variation', true, ... % Perform batch boundary layer variation analysis
+    'POD_rebuild', false, ... % Rebuild POD modes
+    'vortex_video_gamma', false,...
+    'gamma1_video', false, ... % Generate gamma1 video
+    'gamma2_video', false, ... % Generate gamma1 video
+    'lic_video', false,...
+    'pressure_video', false,...
+    'dot_probe', true...
 );
 
 
@@ -75,7 +82,7 @@ end
 
 CameraNo = 1;
 
-
+% plot_editor() can be used to edit any plots once opened.
 
 for i = 1:length(base_dir)
     setup.directory.base = base_dir{i};
@@ -84,35 +91,31 @@ for i = 1:length(base_dir)
     setup.imProperties.dt =dt{i};
     setup.instantaneous.runs = run_instantaneous; % Number of runs to process
     setup.ensemble.runs = run_instantaneous; % Number of runs to process for ensemble statistics
-%     co_ord_editor(setup, CameraNo); % Edit coordinates for the camera
-    % plot_maker_instantaneous(setup, CameraNo, 'Calibrated', 'Test Data Analysis','xlabel', 'ylabel'); % Create plots with custom title
+    co_ord_editor(setup, CameraNo); % Edit coordinates for the camera
+    plot_maker_instantaneous(setup, CameraNo, 'Calibrated', 'Test Data Analysis','xlabel', 'ylabel'); % Create plots with custom title
     Inst_statistics(setup,'Calibrated',CameraNo,'')
-%     noise_floor(setup, CameraNo) % Calculate noise floor for the camera
-    % Cavity-only reconstruction (default)
-    % POD_rebuild(setup, 1);
-    
-
-    
+    SumStatistics(setup,'Calibrated',CameraNo)
+    noise_floor(setup, CameraNo) % Calculate noise floor for the camera
+    POD_rebuild(setup, CameraNo, false); % Rebuild POD modes for the camera
     pressure_reconstruction(setup, CameraNo);
+    POST_POD_multi(setup, CameraNo, '', 'Below')
+    POST_POD_multi(setup, CameraNo, '', 'Above')
+    BL_analysis(setup, CameraNo, '', [-30,-5,30])
+    Vortex_video_gamma(setup, '' ,CameraNo)
+    Gamma1_video(setup, '', CameraNo)
+    Gamma2_video(setup, '', CameraNo)
+    LIC_video(setup, '', CameraNo)
+    Pressure_video(setup, '', CameraNo)
+    dot_probe(setup, CameraNo, '', probe_x, probe_y)
 
 
 
-    % SumStatistics(setup,'Calibrated',CameraNo)
 
 
-    % POST_POD_UV(setup,'Calibrated',CameraNo,'','Above')
-    % POST_POD_UV_Batches(setup,'Calibrated',CameraNo,'','Below')
-    % Frequency_post_pod(setup,'Calibrated',CameraNo,'','Below', 100, 20, [1,2,3,4,5],0.3)
-    % Fluctuation_videos(setup, '', u, SR, 'v', 'Below', [1,2,3,4,5], 75, 20, CameraNo, 'Calibrated')%Fluctuation_videos(setup, endpoint, u_inf, sampling_rate, plot_type, domain, modes, dividing_row, frame_range)
-
-    % RPCA_infil(setup, 0.02, 100,1e-7, 0,true,CameraNo)                    %(setup, lambda, maxIter,tol, peakHeight,gappy,CameraNo)
-    % RPCA_infil_top_bottom(setup, 0.02, 100,1e-7, 0,true,CameraNo,80) %RPCA_infil_top_bottom(setup, lambda, maxIter,tol, peakHeight, gappy, CameraNo, split_row)
 
 
-    % SPOD_stats(setup,5,CameraNo,'',512,true)                                % SPOD_stats(setup,run,CameraNo,endpoint,nDFT,combine)
-    % reconstructSPOD_modes(setup,CameraNo,'',true, 1:20, 2:3)                % reconstructSPOD_modes(setup,CameraNo,endpoint,combine, modes, frequencies)
-    % reconstruct_temporal_SPOD(setup,CameraNo,'',true, 1:20, 2:3,512,5)      % reconstruct_temporal_SPOD(setup,CameraNo,endpoint,combine, modes, frequencies,nDFT,run)
-    % plot_SPOD_reconstruction(setup, CameraNo, '', true, 1:20, 2:3, 500,5)   % plot_SPOD_reconstruction(setup, CameraNo, endpoint, combine, modes, frequencies, numTimeElements,run)
+    % 
+  % plot_SPOD_reconstruction(setup, CameraNo, endpoint, combine, modes, frequencies, numTimeElements,run)
 
 
 
