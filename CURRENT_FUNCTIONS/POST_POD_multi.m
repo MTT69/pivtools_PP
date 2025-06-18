@@ -1,10 +1,17 @@
-function POST_POD_multi(setup, CameraNo, endpoint, domain)
+function POST_POD_multi(setup, CameraNo, endpoint, domain, type, use_merged)
+
+    if nargin < 5
+        type = 'Instantaneous'; % Default for backward compatibility
+    end
+    if nargin < 6
+        use_merged = false; % Default to traditional camera data
+    end
 
     if setup.pipeline.POST_POD
-
-      
-        dataloc = fullfile(setup.directory.base, 'CalibratedPIV', num2str(setup.imProperties.imageCount), ...
-                               ['Cam', num2str(CameraNo)], 'Instantaneous', endpoint);
+        
+        % Get data paths using centralized function
+        paths = get_data_paths(setup, type, endpoint, CameraNo, use_merged);
+        dataloc = paths.data_dir;
         
         fprintf('Performing POD analysis using SVD at %s\n', datetime('now'));
 
@@ -87,8 +94,13 @@ function POST_POD_multi(setup, CameraNo, endpoint, domain)
                 PHI = normc(V_svd);
     
                 % Save results
-                directory = fullfile(setup.directory.base, 'Statistics', num2str(setup.imProperties.imageCount), ...
-                                     ['Cam' num2str(CameraNo)], 'Instantaneous', Type, endpoint, domain,num2str(batch));
+                if use_merged
+                    directory = fullfile(setup.directory.base, 'Statistics', 'Merged', type, ...
+                                         endpoint, domain, num2str(batch));
+                else
+                    directory = fullfile(setup.directory.base, 'Statistics', num2str(setup.imProperties.imageCount), ...
+                                         ['Cam' num2str(CameraNo)], type, endpoint, domain, num2str(batch));
+                end
                 if ~exist(directory, 'dir')
                     mkdir(directory);
                 end

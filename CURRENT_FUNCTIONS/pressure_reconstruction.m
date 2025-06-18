@@ -1,8 +1,21 @@
-function pressure_reconstruction(setup, CameraNo)
+function pressure_reconstruction(setup, CameraNo, type, endpoint, use_merged)
     % PRESSURE_RECONSTRUCTION - Reconstructs instantaneous pressure fields from PIV data using OMNIPOL
     % Inputs:
     %   setup - setup structure containing all parameters
     %   CameraNo - camera number
+    %   type - 'Instantaneous', 'Calibrated', or 'Merged'
+    %   endpoint - endpoint subfolder (optional, defaults to '')
+    %   use_merged - boolean to use merged data or not (optional, defaults to false)
+    
+    if nargin < 3
+        type = 'Instantaneous'; % Default for backward compatibility
+    end
+    if nargin < 4
+        endpoint = ''; % Default endpoint
+    end
+    if nargin < 5
+        use_merged = false; % Default to traditional camera data
+    end
     
     % Water properties at room temperature (20°C)
     rho_water = 998.2;  % kg/m³
@@ -12,12 +25,10 @@ function pressure_reconstruction(setup, CameraNo)
         for i = setup.instantaneous.runs
             disp(['Processing pressure reconstruction for run: ', num2str(i)]);
             
-            % Define directories
-            base_dir = setup.directory.base;
-            data_dir = fullfile(base_dir, 'CalibratedPIV', num2str(setup.imProperties.imageCount), ...
-                               ['Cam', num2str(CameraNo)], 'Instantaneous');
-            stats_dir = fullfile(base_dir, 'Statistics', num2str(setup.imProperties.imageCount), ...
-                                ['Cam' num2str(CameraNo)], 'Instantaneous', 'Calibrated');
+            % Get data paths using centralized function
+            paths = get_data_paths(setup, type, endpoint, CameraNo, use_merged);
+            data_dir = paths.data_dir;
+            stats_dir = paths.stats_dir;
             
             % Load mean statistics and coordinates
             window_size_str = [num2str(setup.instantaneous.windowSize(i,1)) 'x' num2str(setup.instantaneous.windowSize(i,2))];
@@ -33,7 +44,7 @@ function pressure_reconstruction(setup, CameraNo)
             dx = abs(X_coords(1,2) - X_coords(1,1));
             
             % Create output directory
-            pressure_dir = fullfile(data_dir, 'Pressure');
+            pressure_dir = paths.pressure_dir;
             if ~exist(pressure_dir, 'dir')
                 mkdir(pressure_dir);
             end

@@ -1,19 +1,25 @@
-function LIC_video(setup, endpoint, CameraNo)
+function LIC_video(setup, endpoint, CameraNo, type, use_merged)
 % LIC_VIDEO - Function to create Line Integral Convolution visualization video
 %   This function generates a video showing instantaneous flow using LIC technique
 %
-%   Usage: LIC_video(setup, endpoint, CameraNo)
+%   Usage: LIC_video(setup, endpoint, CameraNo, type)
+%   type: 'Instantaneous', 'Calibrated', or 'Merged'
+
+if nargin < 4
+    type = 'Instantaneous'; % Default for backward compatibility
+end
+if nargin < 5
+    use_merged = false;
+end
 
 if setup.pipeline.lic_video
     fprintf('Creating LIC video for base: %s at %s\n', setup.directory.base, datetime('now'));
     
-    % Set up data location
-    dataloc = fullfile(setup.directory.base, 'CalibratedPIV', num2str(setup.imProperties.imageCount), ...
-                      ['Cam', num2str(CameraNo)], 'Instantaneous', endpoint);
+    % Get data paths using centralized function
+    paths = get_data_paths(setup, type, endpoint, CameraNo, use_merged);
+    dataloc = paths.data_dir;
+    output_dir = fullfile(paths.video_dir, 'LIC_Analysis');
     
-    % Set up output directory
-    output_dir = fullfile(setup.directory.base, 'Videos', num2str(setup.imProperties.imageCount), ...
-                         ['Cam', num2str(CameraNo)], 'LIC_Analysis');
     if ~exist(output_dir, 'dir')
         mkdir(output_dir);
     end
@@ -212,4 +218,4 @@ if setup.pipeline.lic_video
     fprintf('LIC video generation completed at %s\n', datetime('now'));
 end
 
-end
+

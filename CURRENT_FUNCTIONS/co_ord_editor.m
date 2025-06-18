@@ -1,7 +1,20 @@
-function co_ord_editor(setup, CameraNo)
-    dataloc = (fullfile(setup.directory.base, 'CalibratedPIV', num2str(setup.imProperties.imageCount),['Cam', num2str(CameraNo)], 'Instantaneous'));
+function co_ord_editor(setup, CameraNo, type, endpoint, use_merged)
+    if nargin < 3
+        type = 'Instantaneous'; % Default for backward compatibility
+    end
+    if nargin < 4
+        endpoint = ''; % Default endpoint
+    end
+    if nargin < 5
+        use_merged = false; % Default to traditional camera data
+    end
     
+    % Set up data location based on type
     if setup.pipeline.instantaneous_cords    % Process instantaneous runs
+        % Get data paths using centralized function
+        paths = get_data_paths(setup, type, endpoint, CameraNo, use_merged);
+        dataloc = paths.data_dir;
+        
         for i = setup.instantaneous.runs
             VelData = load(fullfile(dataloc, [num2str(sprintf(setup.instantaneous.nameConvention{1}, 1))]));
             Co_ords = load(fullfile(dataloc, 'Co_ords.mat'));
@@ -107,8 +120,9 @@ function co_ord_editor(setup, CameraNo)
     end 
     % Process ensemble runs
     if setup.pipeline.ensemble_cords
-       
-        dataloc_ensemble = (fullfile(setup.directory.base, 'CalibratedPIV', num2str(setup.imProperties.imageCount),['Cam', num2str(CameraNo)], 'Ensemble'));
+        % Get ensemble data paths
+        paths_ensemble = get_data_paths(setup, 'Ensemble', endpoint, CameraNo, use_merged);
+        dataloc_ensemble = paths_ensemble.data_dir;
         
         for i = setup.ensemble.runs
             VelData = load(fullfile(dataloc_ensemble, [num2str(sprintf(setup.ensemble.nameConvention{1}, 1))]));

@@ -1,12 +1,16 @@
-function BL_analysis(setup, CameraNo, endpoint, x_loc)
+function BL_analysis(setup, CameraNo, endpoint, x_loc, type, use_merged)
+    if nargin < 5
+        type = 'Instantaneous'; % Default for backward compatibility
+    end
+    if nargin < 6
+        use_merged = false; % Default to traditional camera data
+    end
+    
     if setup.pipeline.batch_BL_variation 
-        dataloc = fullfile(setup.directory.base, 'CalibratedPIV', num2str(setup.imProperties.imageCount), ...
-                        ['Cam', num2str(CameraNo)], 'Instantaneous', endpoint);
-        
-        % Load statistics data for turbulence quantities
-        statistics = fullfile(setup.directory.base, 'Statistics', num2str(setup.imProperties.imageCount), ...
-                             ['Cam', num2str(CameraNo)], 'Instantaneous', 'Calibrated');
-
+        % Get data paths using centralized function
+        paths = get_data_paths(setup, type, endpoint, CameraNo, use_merged);
+        dataloc = paths.data_dir;
+        statistics = paths.stats_dir;
 
         for i = setup.instantaneous.runs
             filename = fullfile(statistics, ['MeanStats' num2str(setup.instantaneous.windowSize(i,1)) 'x' num2str(setup.instantaneous.windowSize(i,2)) '.mat']);

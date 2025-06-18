@@ -1,24 +1,23 @@
-function Pressure_video(setup, endpoint, CameraNo)
+function Pressure_video(setup, endpoint, CameraNo, type, use_merged)
 % PRESSURE_VIDEO - Function to create pressure field visualization video
-%   This function generates a video showing instantaneous pressure fields
-%   reconstructed from PIV data
-%
-%   Usage: Pressure_video(setup, endpoint, CameraNo)
+%   Usage: Pressure_video(setup, endpoint, CameraNo, type, use_merged)
+
+if nargin < 4
+    type = 'Instantaneous'; % Default to Instantaneous for backward compatibility
+end
+if nargin < 5
+    use_merged = false; % Default to traditional camera data
+end
 
 if setup.pipeline.pressure_video
     fprintf('Creating pressure video for base: %s at %s\n', setup.directory.base, datetime('now'));
     
-    % Set up data location
-    dataloc = fullfile(setup.directory.base, 'CalibratedPIV', num2str(setup.imProperties.imageCount), ...
-                      ['Cam', num2str(CameraNo)], 'Instantaneous', endpoint);
+    % Get data paths using centralized function
+    paths = get_data_paths(setup, type, endpoint, CameraNo, use_merged);
+    dataloc = paths.data_dir;
+    pressure_dataloc = paths.pressure_dir;
+    output_dir = fullfile(paths.video_dir, 'Pressure_Analysis');
     
-    % Set up pressure data location
-    pressure_dataloc = fullfile(setup.directory.base, 'CalibratedPIV', num2str(setup.imProperties.imageCount), ...
-                               ['Cam', num2str(CameraNo)], 'Instantaneous', 'Pressure');
-    
-    % Set up output directory
-    output_dir = fullfile(setup.directory.base, 'Videos', num2str(setup.imProperties.imageCount), ...
-                         ['Cam', num2str(CameraNo)], 'Pressure_Analysis');
     if ~exist(output_dir, 'dir')
         mkdir(output_dir);
     end
@@ -207,4 +206,3 @@ if setup.pipeline.pressure_video
     fprintf('Pressure video generation completed at %s\n', datetime('now'));
 end
 
-end

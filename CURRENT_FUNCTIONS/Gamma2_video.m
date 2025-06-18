@@ -1,19 +1,25 @@
-function Gamma2_video(setup, endpoint, CameraNo)
+function Gamma2_video(setup, endpoint, CameraNo, type, use_merged)
 % gamma2_VIDEO - Function to create gamma2 field visualization video
 %   This function generates a video showing instantaneous gamma2 field
 %
-%   Usage: gamma2_video(setup, endpoint, CameraNo)
+%   Usage: Gamma2_video(setup, endpoint, CameraNo, type)
+%   type: 'Instantaneous', 'Calibrated', or 'Merged'
+
+if nargin < 4
+    type = 'Instantaneous'; % Default for backward compatibility
+end
+if nargin < 5
+    use_merged = false;
+end
 
 if setup.pipeline.gamma2_video
     fprintf('Creating gamma2 video for base: %s at %s\n', setup.directory.base, datetime('now'));
     
-    % Set up data location
-    dataloc = fullfile(setup.directory.base, 'CalibratedPIV', num2str(setup.imProperties.imageCount), ...
-                      ['Cam', num2str(CameraNo)], 'Instantaneous', endpoint);
+    % Get data paths using centralized function
+    paths = get_data_paths(setup, type, endpoint, CameraNo, use_merged);
+    dataloc = paths.data_dir;
+    output_dir = fullfile(paths.video_dir, 'gamma2_Analysis');
     
-    % Set up output directory
-    output_dir = fullfile(setup.directory.base, 'Videos', num2str(setup.imProperties.imageCount), ...
-                         ['Cam', num2str(CameraNo)], 'gamma2_Analysis');
     if ~exist(output_dir, 'dir')
         mkdir(output_dir);
     end
@@ -49,8 +55,8 @@ if setup.pipeline.gamma2_video
             sigma = 1; % Adjust smoothing strength
 %             u_smooth = imgaussfilt(u_sample, sigma, 'FilterDomain', 'spatial');
 %             v_smooth = imgaussfilt(v_sample, sigma, 'FilterDomain', 'spatial');
-            u_smooth = u;
-            v_smooth = v;
+            u_smooth = u_sample;
+            v_smooth = v_sample;
             
             % Apply mask to smoothed data
             u_smooth(b_mask) = NaN;
@@ -128,7 +134,7 @@ if setup.pipeline.gamma2_video
             
             % Update colorbar label
             cb = colorbar(ax);
-            cb.Label.String = '$\Gamma_1$';
+            cb.Label.String = 'Gamma2';
             cb.Label.Interpreter = 'latex';
             cb.Label.FontSize = setup.figures.labelFontSize;
             
@@ -176,7 +182,7 @@ if setup.pipeline.gamma2_video
         gammaField(b_mask) = 0;
         
         % Create sample frame using traditional save method
-        sample_variableName = sprintf('SampleFrame_gamma2_Run%d', i);
+        sample_variableName = sprintf('SampleFramgamma2Run%d', i);
         
         plot_save_mask(gammaField, b_mask, xcorners, ycorners, ...
                       setup.figures.axisFontSize, setup.figures.titleFontSize, ...
@@ -190,7 +196,7 @@ if setup.pipeline.gamma2_video
         fig = openfig(sample_fig_filename);
         ax = gca;
         
-        title(ax, sprintf('Sample Frame: Instantaneous $\\Gamma_1$ Field\\nFrame %d, Run %d', ...
+        title(ax, sprintf('Sample Frame: Instantaneous Gamma2 Field\\nFrame %d, Run %d', ...
                      mid_frame, i), ...
               'Interpreter', 'latex', 'FontSize', setup.figures.titleFontSize);
         
@@ -198,12 +204,12 @@ if setup.pipeline.gamma2_video
         ylabel(ax, 'y [mm]', 'Interpreter', 'latex', 'FontSize', setup.figures.labelFontSize);
         
         cb = colorbar(ax);
-        cb.Label.String = '$\Gamma_1$';
+        cb.Label.String = 'Gamma2';
         cb.Label.Interpreter = 'latex';
         cb.Label.FontSize = setup.figures.labelFontSize;
         
         % Save enhanced sample frame
-        enhanced_base = sprintf('SampleFrame_gamma2_Run%d_%dx%d_enhanced', i, setup.instantaneous.windowSize(i,1), setup.instantaneous.windowSize(i,2));
+        enhanced_base = sprintf('SampleFramegamma2Run%d_%dx%d_enhanced', i, setup.instantaneous.windowSize(i,1), setup.instantaneous.windowSize(i,2));
         saveas(fig, fullfile(sample_frame_dir, [enhanced_base, '.fig']));
         saveas(fig, fullfile(sample_frame_dir, [enhanced_base, '.png']));
         saveas(fig, fullfile(sample_frame_dir, [enhanced_base, '.eps']));
@@ -211,6 +217,4 @@ if setup.pipeline.gamma2_video
     end
     
     fprintf('gamma2 video generation completed at %s\n', datetime('now'));
-end
-
 end

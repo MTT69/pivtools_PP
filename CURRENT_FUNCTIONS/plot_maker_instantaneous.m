@@ -1,12 +1,6 @@
-function plot_maker_instantaneous(setup, CameraNo, Type, customTitle, xLabel, yLabel)
+function plot_maker_instantaneous(setup, CameraNo, Type, customTitle, xLabel, yLabel, endpoint, use_merged)
 % PLOT_MAKER_INSTANTANEOUS Creates instantaneous plots from PIV data with mask functionality
-%   Inputs:
-%       setup       - setup configuration structure
-%       cameraNo    - camera number identifier
-%       Type        - 'Calibrated' or 'Uncalibrated' data type
-%       customTitle - optional custom title prefix for plots
-%       xLabel      - optional custom x-axis label (default: 'X Position')
-%       yLabel      - optional custom y-axis label (default: 'Y Position')
+    
     if setup.pipeline.manual_plots
     % Set default Type if not provided
     if nargin < 3
@@ -27,19 +21,20 @@ function plot_maker_instantaneous(setup, CameraNo, Type, customTitle, xLabel, yL
         yLabel = 'Y Position';
     end
     
-    % Set endpoint (empty for now, can be extended later)
-    endpoint = '';
-    
-    % Determine data location based on Type
-    if strcmp(Type,'Calibrated')        
-        dataloc = (fullfile(setup.directory.base, 'CalibratedPIV', num2str(setup.imProperties.imageCount),['Cam', num2str(CameraNo)], 'Instantaneous',endpoint));
-    elseif strcmp(Type, 'Uncalibrated')
-        dataloc = (fullfile(setup.directory.base, 'UncalibratedPIV', num2str(setup.imProperties.imageCount),['Cam', num2str(CameraNo)], 'Instantaneous'));
-    else
-        error('Incompatible type for instantaneous statistics');
+    % Set default endpoint if not provided
+    if nargin < 7
+        endpoint = '';
     end
     
-    directory=fullfile(setup.directory.base, 'Statistics', num2str(setup.imProperties.imageCount), ['Cam' num2str(CameraNo)], 'Instantaneous',Type);
+    % Set default use_merged if not provided
+    if nargin < 8
+        use_merged = false;
+    end
+    
+    % Get data paths using centralized function
+    paths = get_data_paths(setup, Type, endpoint, CameraNo, use_merged);
+    dataloc = paths.data_dir;
+    directory = paths.stats_dir;
     
     selectedField = '';  % Store user selection
     

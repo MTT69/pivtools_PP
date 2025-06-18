@@ -1,4 +1,4 @@
-function Inst_statistics(setup,Type,CameraNo,endpoint)
+function Inst_statistics(setup,Type,endpoint)
 
     % /******************************************************************************
 %  * Function: Perform_PIV_statistics_inst
@@ -89,18 +89,22 @@ function Inst_statistics(setup,Type,CameraNo,endpoint)
 %  *   the specified cameras and runs, saving the results in the appropriate directory.
 %  *   
 %  *****************************************************************************/
-    
     if setup.pipeline.statistics_inst
         fprintf('Inst_statistics for base: %s at %s\n', setup.directory.base, datetime('now'));
-        if strcmp(Type,'Calibrated')        
-            dataloc = (fullfile(setup.directory.base, 'CalibratedPIV', num2str(setup.imProperties.imageCount),['Cam', num2str(CameraNo)], 'Instantaneous',endpoint));
+        
+        % Loop through all cameras
+        for CameraNo = 1:setup.imProperties.cameraCount
+            fprintf('Processing Camera %d of %d\n', CameraNo, setup.imProperties.cameraCount);
             
-        elseif strcmp(Type, 'Uncalibrated')
-            dataloc = (fullfile(setup.directory.base, 'UncalibratedPIV', num2str(setup.imProperties.imageCount),['Cam', num2str(CameraNo)], 'Instantaneous'));
-        else
-            error('Incompatible type for instantaneous statistics');
-            
-        end
+            if strcmp(Type,'Calibrated')        
+                dataloc = (fullfile(setup.directory.base, 'CalibratedPIV', num2str(setup.imProperties.imageCount),['Cam', num2str(CameraNo)], 'Instantaneous',endpoint));
+                
+            elseif strcmp(Type, 'Uncalibrated')
+                dataloc = (fullfile(setup.directory.base, 'UncalibratedPIV', num2str(setup.imProperties.imageCount),['Cam', num2str(CameraNo)], 'Instantaneous'));
+            else
+                error('Incompatible type for instantaneous statistics');
+                
+            end
         
         for i = setup.instantaneous.runs
             VelData = load(fullfile(dataloc, [num2str(sprintf(setup.instantaneous.nameConvention{1}, 1))]));
@@ -311,9 +315,7 @@ function Inst_statistics(setup,Type,CameraNo,endpoint)
             plot_save_mask(V_prime_Vprime_mean, b_mask,xcorners,ycorners,setup.figures.axisFontSize,setup.figures.titleFontSize,directory,setup.instantaneous.runs,[setup.instantaneous.windowSize(i,1), setup.instantaneous.windowSize(i,2)],i, variableName, 'Inst','dir');
 
             variableName ="u prime v prime ";
-            plot_save_mask(U_prime_Vprime_mean, b_mask,xcorners,ycorners,setup.figures.axisFontSize,setup.figures.titleFontSize,directory,setup.instantaneous.runs,[setup.instantaneous.windowSize(i,1), setup.instantaneous.windowSize(i,2)],i, variableName, 'Inst','dir');
-
-            variableName ="Mean Vorticity ";
+            plot_save_mask(U_prime_Vprime_mean, b_mask,xcorners,ycorners,setup.figures.axisFontSize,setup.figures.titleFontSize,directory,setup.instantaneous.runs,[setup.instantaneous.windowSize(i,1), setup.instantaneous.windowSize(i,2)],i, variableName, 'Inst','dir');            variableName ="Mean Vorticity ";
             plot_save_mask(mean_Vorticity, b_mask,xcorners,ycorners,setup.figures.axisFontSize,setup.figures.titleFontSize,directory,setup.instantaneous.runs,[setup.instantaneous.windowSize(i,1), setup.instantaneous.windowSize(i,2)],i, variableName, 'Inst','dir');
 
             variableName ="Mean Divergence ";
@@ -322,6 +324,7 @@ function Inst_statistics(setup,Type,CameraNo,endpoint)
             close all;
             
 
-        end
-    end
-end
+        end % End of runs loop
+        end % End of camera loop
+    end % End of pipeline check
+end % End of function

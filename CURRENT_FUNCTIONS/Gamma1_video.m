@@ -1,19 +1,25 @@
-function Gamma1_video(setup, endpoint, CameraNo)
+function Gamma1_video(setup, endpoint, CameraNo, type, use_merged)
 % GAMMA1_VIDEO - Function to create gamma1 field visualization video
 %   This function generates a video showing instantaneous gamma1 field
 %
-%   Usage: Gamma1_video(setup, endpoint, CameraNo)
+%   Usage: Gamma1_video(setup, endpoint, CameraNo, type)
+%   type: 'Instantaneous', 'Calibrated', or 'Merged'
+
+if nargin < 4
+    type = 'Instantaneous'; % Default for backward compatibility
+end
+if nargin < 5
+    use_merged = false;
+end
 
 if setup.pipeline.gamma1_video
     fprintf('Creating gamma1 video for base: %s at %s\n', setup.directory.base, datetime('now'));
     
-    % Set up data location
-    dataloc = fullfile(setup.directory.base, 'CalibratedPIV', num2str(setup.imProperties.imageCount), ...
-                      ['Cam', num2str(CameraNo)], 'Instantaneous', endpoint);
+    % Get data paths using centralized function
+    paths = get_data_paths(setup, type, endpoint, CameraNo, use_merged);
+    dataloc = paths.data_dir;
+    output_dir = fullfile(paths.video_dir, 'Gamma1_Analysis');
     
-    % Set up output directory
-    output_dir = fullfile(setup.directory.base, 'Videos', num2str(setup.imProperties.imageCount), ...
-                         ['Cam', num2str(CameraNo)], 'Gamma1_Analysis');
     if ~exist(output_dir, 'dir')
         mkdir(output_dir);
     end
@@ -126,7 +132,7 @@ if setup.pipeline.gamma1_video
             
             % Update colorbar label
             cb = colorbar(ax);
-            cb.Label.String = '$\Gamma_1$';
+            cb.Label.String = 'Gamma1';
             cb.Label.Interpreter = 'latex';
             cb.Label.FontSize = setup.figures.labelFontSize;
             
@@ -174,7 +180,7 @@ if setup.pipeline.gamma1_video
         gammaField(b_mask) = 0;
         
         % Create sample frame using traditional save method
-        sample_variableName = sprintf('SampleFrame_Gamma1_Run%d', i);
+        sample_variableName = sprintf('SampleFrameGamma1Run%d', i);
         
         plot_save_mask(gammaField, b_mask, xcorners, ycorners, ...
                       setup.figures.axisFontSize, setup.figures.titleFontSize, ...
@@ -188,7 +194,7 @@ if setup.pipeline.gamma1_video
         fig = openfig(sample_fig_filename);
         ax = gca;
         
-        title(ax, sprintf('Sample Frame: Instantaneous $\\Gamma_1$ Field\\nFrame %d, Run %d', ...
+        title(ax, sprintf('Sample Frame: Instantaneous Gamma1 Field\\nFrame %d, Run %d', ...
                      mid_frame, i), ...
               'Interpreter', 'latex', 'FontSize', setup.figures.titleFontSize);
         
@@ -196,12 +202,12 @@ if setup.pipeline.gamma1_video
         ylabel(ax, 'y [mm]', 'Interpreter', 'latex', 'FontSize', setup.figures.labelFontSize);
         
         cb = colorbar(ax);
-        cb.Label.String = '$\Gamma_1$';
+        cb.Label.String = 'Gamma1';
         cb.Label.Interpreter = 'latex';
         cb.Label.FontSize = setup.figures.labelFontSize;
         
         % Save enhanced sample frame
-        enhanced_base = sprintf('SampleFrame_Gamma1_Run%d_%dx%d_enhanced', i, setup.instantaneous.windowSize(i,1), setup.instantaneous.windowSize(i,2));
+        enhanced_base = sprintf('SampleFrameGamma1Run%d_%dx%d_enhanced', i, setup.instantaneous.windowSize(i,1), setup.instantaneous.windowSize(i,2));
         saveas(fig, fullfile(sample_frame_dir, [enhanced_base, '.fig']));
         saveas(fig, fullfile(sample_frame_dir, [enhanced_base, '.png']));
         saveas(fig, fullfile(sample_frame_dir, [enhanced_base, '.eps']));
@@ -211,4 +217,3 @@ if setup.pipeline.gamma1_video
     fprintf('Gamma1 video generation completed at %s\n', datetime('now'));
 end
 
-end

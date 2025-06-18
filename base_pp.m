@@ -4,18 +4,31 @@ close all
 
 % Initialize the setup structure
 setup = struct();
+
+%%%%%%%%%%%% Global Processing Parameters %%%%%%%%%%%%%
+% Define global type and endpoint for consistent processing
+global_type = 'Instantaneous'; % Options: 'Instantaneous' or 'Ensemble' only
+global_endpoint = ''; % Endpoint subfolder (e.g., 'rpca', 'denoised', etc.)
+use_merged_data = true; % Set to true to process merged data instead of camera data
+
 %%
 %%%%%%%%%%%% Folders %%%%%%%%%%%%%
 % Define setup directory structure
 setup.directory = struct( ...
-    'code', 'C:\Users\Lab8-2\Documents\pivtools_PP' ... % Location of PIV codes                
+    'code', 'C:\Users\mtt1e23\OneDrive - University of Southampton\Documents\#current_processing\PIVTOOLS_post_process' ... % Location of PIV codes                
 );
 
+% base_dir = { ...
+%    'D:\Full\Processed_PIV_validation\90degree_250light_250hz_1000dt'
+% };
+
 base_dir = { ...
-   'D:\Full\Processed_PIV_validation\90degree_250light_250hz_1000dt'
+   'D:\PIV_April25\Coast_Burst\t0-5b10_250413_180904_644848_507575'
 };
 
-run_instantaneous = [5];
+
+
+run_instantaneous = [3];
 run_ensemble = [6];
 dt = {1000*10^(-6), 3000*10^(-6)}; % Time step in seconds for each run
 
@@ -48,18 +61,22 @@ setup.pipeline = struct( ...
     'statistics_sum', false, ... % Generate instantaneous statistics
     'ensemble_cords', false, ... % edits ensemble coordinates
     'instantaneous_cords', false, ... % edits instantaneous coordinates
+    'ensemble_cords_multi', false, ... % edits ensemble coordinates
+    'instantaneous_cords_multi', false, ... % edits instantaneous coordinates
     'POST_POD', false,... % Perform POST POD analysis
     'pressure_reconstruction', false,... % Perform pressure reconstruction
     'manual_plots', false, ... % Generate manual plots
     'noise_floor', false, ... % Calculate noise floor
-    'batch_BL_variation', true, ... % Perform batch boundary layer variation analysis
+    'batch_BL_variation', false, ... % Perform batch boundary layer variation analysis
     'POD_rebuild', false, ... % Rebuild POD modes
     'vortex_video_gamma', false,...
-    'gamma1_video', false, ... % Generate gamma1 video
+    'gamma1_video', true, ... % Generate gamma1 video
     'gamma2_video', false, ... % Generate gamma1 video
     'lic_video', false,...
     'pressure_video', false,...
-    'dot_probe', true...
+    'dot_probe', false,...
+    'merge', false,...
+    'flipUX',false...
 );
 
 
@@ -91,35 +108,30 @@ for i = 1:length(base_dir)
     setup.imProperties.dt =dt{i};
     setup.instantaneous.runs = run_instantaneous; % Number of runs to process
     setup.ensemble.runs = run_instantaneous; % Number of runs to process for ensemble statistics
-    co_ord_editor(setup, CameraNo); % Edit coordinates for the camera
-    plot_maker_instantaneous(setup, CameraNo, 'Calibrated', 'Test Data Analysis','xlabel', 'ylabel'); % Create plots with custom title
-    Inst_statistics(setup,'Calibrated',CameraNo,'')
-    SumStatistics(setup,'Calibrated',CameraNo)
-    noise_floor(setup, CameraNo) % Calculate noise floor for the camera
-    POD_rebuild(setup, CameraNo, false); % Rebuild POD modes for the camera
-    pressure_reconstruction(setup, CameraNo);
-    POST_POD_multi(setup, CameraNo, '', 'Below')
-    POST_POD_multi(setup, CameraNo, '', 'Above')
-    BL_analysis(setup, CameraNo, '', [-30,-5,30])
-    Vortex_video_gamma(setup, '' ,CameraNo)
-    Gamma1_video(setup, '', CameraNo)
-    Gamma2_video(setup, '', CameraNo)
-    LIC_video(setup, '', CameraNo)
-    Pressure_video(setup, '', CameraNo)
-    dot_probe(setup, CameraNo, '', probe_x, probe_y)
-
-
-
-
-
-
+    
+    % Processing pipeline with global type and endpoint
+    co_ord_editor(setup, CameraNo, global_type, global_endpoint, use_merged_data);
+    plot_maker_instantaneous(setup, CameraNo, global_type, 'Test Data Analysis','xlabel', 'ylabel', global_endpoint, use_merged_data); % Create plots with custom title
+    % Inst_statistics(setup, global_type, global_endpoint, use_merged_data)
+    % SumStatistics(setup, global_type, CameraNo, use_merged_data)
+    noise_floor(setup, CameraNo, global_type, global_endpoint, use_merged_data);
+    POD_rebuild(setup, CameraNo, false, global_type, use_merged_data);
+    pressure_reconstruction(setup, CameraNo, global_type, global_endpoint, use_merged_data);
+    POST_POD_multi(setup, CameraNo, global_endpoint, 'Below', global_type, use_merged_data)
+    POST_POD_multi(setup, CameraNo, global_endpoint, 'Above', global_type, use_merged_data)
+    BL_analysis(setup, CameraNo, global_endpoint, [-30,-5,30], global_type, use_merged_data)
+    Vortex_video_gamma(setup, global_endpoint, CameraNo, global_type, use_merged_data)
+    Gamma1_video(setup, global_endpoint, CameraNo, global_type, use_merged_data)
+    Gamma2_video(setup, global_endpoint, CameraNo, global_type, use_merged_data)
+    LIC_video(setup, global_endpoint, CameraNo, global_type, use_merged_data)
+    Pressure_video(setup, global_endpoint, CameraNo, global_type, use_merged_data)
+    % dot_probe(setup, CameraNo, global_endpoint, probe_x, probe_y, global_type, use_merged_data)
+    multi_camera_coord_editor(setup, global_type, global_endpoint, use_merged_data)
+    flip_ux_direction(setup, global_type, global_endpoint, use_merged_data)
+    merge(setup, global_type, global_endpoint)
 
     % 
   % plot_SPOD_reconstruction(setup, CameraNo, endpoint, combine, modes, frequencies, numTimeElements,run)
-
-
-
-
 
 end
 

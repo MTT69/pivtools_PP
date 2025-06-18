@@ -1,24 +1,31 @@
-function POD_rebuild(setup, CameraNo, full_domain_toggle)
+function POD_rebuild(setup, CameraNo, full_domain_toggle, type, use_merged)
     % POD_rebuild - Reconstructs flow field using POD modes based on noise analysis
     % Inputs:
     %   setup - setup structure containing all parameters
     %   CameraNo - camera number
     %   full_domain_toggle - logical, true for full domain POD, false for cavity only
+    %   type - 'Instantaneous', 'Calibrated', or 'Merged'
+    %   use_merged - logical, true to use merged data, false for traditional camera data
     
     if nargin < 3
         full_domain_toggle = false; % Default to cavity-only reconstruction
     end
+    if nargin < 4
+        type = 'Instantaneous'; % Default for backward compatibility
+    end
+    if nargin < 5
+        use_merged = false; % Default to traditional camera data
+    end
+    
     if setup.pipeline.POD_rebuild
        
     for i = setup.instantaneous.runs
         disp(['Processing run: ', num2str(i)]);
         
-        % Define directories
-        base_dir = setup.directory.base;
-        stats_dir = fullfile(base_dir, 'Statistics', num2str(setup.imProperties.imageCount), ...
-                            ['Cam' num2str(CameraNo)], 'Instantaneous', 'Calibrated');
-        data_dir = fullfile(base_dir, 'CalibratedPIV', num2str(setup.imProperties.imageCount), ...
-                           ['Cam', num2str(CameraNo)], 'Instantaneous');
+        % Get data paths using centralized function
+        paths = get_data_paths(setup, type, '', CameraNo, use_merged);
+        stats_dir = paths.stats_dir;
+        data_dir = paths.data_dir;
         
         % Load mean statistics
         window_size_str = [num2str(setup.instantaneous.windowSize(i,1)) 'x' num2str(setup.instantaneous.windowSize(i,2))];

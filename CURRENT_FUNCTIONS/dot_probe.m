@@ -1,4 +1,4 @@
-function dot_probe(setup, CameraNo, endpoint, probe_x, probe_y)
+function dot_probe(setup, CameraNo, endpoint, probe_x, probe_y, type, use_merged)
     % DOT_PROBE - Spatial averaging of velocity components over 3x3 pixel probe
     % Inputs:
     %   setup - setup structure
@@ -6,10 +6,20 @@ function dot_probe(setup, CameraNo, endpoint, probe_x, probe_y)
     %   endpoint - endpoint string
     %   probe_x - x-coordinate of probe center in physical units
     %   probe_y - y-coordinate of probe center in physical units
+    %   type - 'Instantaneous' or 'Ensemble'
+    %   use_merged - logical, true to use merged data, false for traditional camera data
     
-    if setup.pipeline.POST_POD
-        dataloc = fullfile(setup.directory.base, 'CalibratedPIV', num2str(setup.imProperties.imageCount), ...
-                          ['Cam', num2str(CameraNo)], 'Instantaneous', endpoint);
+    if nargin < 6
+        type = 'Instantaneous'; % Default for backward compatibility
+    end
+    if nargin < 7
+        use_merged = false; % Default to traditional camera data
+    end
+    
+    if setup.pipeline.dot_probe
+        % Get data paths using centralized function
+        paths = get_data_paths(setup, type, endpoint, CameraNo, use_merged);
+        dataloc = paths.data_dir;
         
         fprintf('Performing dot probe analysis at physical coordinates (%.2f, %.2f) at %s\n', probe_x, probe_y, datetime('now'));
         
@@ -82,8 +92,12 @@ function dot_probe(setup, CameraNo, endpoint, probe_x, probe_y)
             end
             
             % Save results
-            output_dir = fullfile(setup.directory.base, 'Statistics', num2str(setup.imProperties.imageCount), ...
-                                 ['Cam' num2str(CameraNo)], 'Instantaneous', endpoint, 'DotProbe');
+            if use_merged
+                output_dir = fullfile(setup.directory.base, 'Statistics', 'Merged', type, endpoint, 'DotProbe');
+            else
+                output_dir = fullfile(setup.directory.base, 'Statistics', num2str(setup.imProperties.imageCount), ...
+                                     ['Cam' num2str(CameraNo)], type, endpoint, 'DotProbe');
+            end
             if ~exist(output_dir, 'dir')
                 mkdir(output_dir);
             end

@@ -1,10 +1,22 @@
-function noise_floor(setup, CameraNo)
+function noise_floor(setup, CameraNo, type, endpoint, use_merged)
+    if nargin < 3
+        type = 'Instantaneous'; % Default for backward compatibility
+    end
+    if nargin < 4
+        endpoint = ''; % Default endpoint
+    end
+    if nargin < 5
+        use_merged = false; % Default to traditional camera data
+    end
+    
     if setup.pipeline.noise_floor 
         
     for i = setup.instantaneous.runs
-        directory=fullfile(setup.directory.base, 'Statistics', num2str(setup.imProperties.imageCount), ['Cam' num2str(CameraNo)], 'Instantaneous','Calibrated');
+        % Get data paths using centralized function
+        paths = get_data_paths(setup, type, endpoint, CameraNo, use_merged);
+        directory = paths.stats_dir;
+        dataloc = paths.data_dir;
 
-        dataloc = (fullfile(setup.directory.base, 'CalibratedPIV', num2str(setup.imProperties.imageCount),['Cam', num2str(CameraNo)], 'Instantaneous'));
         MeanStats=load(fullfile(directory,['MeanStats',num2str(setup.instantaneous.windowSize(i,1)) 'x' num2str(setup.instantaneous.windowSize(i,2)),'.mat']));
 
 

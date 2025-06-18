@@ -1,21 +1,26 @@
-function Vortex_video_gamma(setup, endpoint,CameraNo)
+function Vortex_video_gamma(setup, endpoint, CameraNo, type, use_merged)
 % VORTEX_VIDEO_GAMMA - Function to create vortex visualization video
 %   This function generates a video showing instantaneous vorticity with gamma1 contour overlays
 %
-%   Usage: Vortex_video_gamma(setup, endpoint)
+%   Usage: Vortex_video_gamma(setup, endpoint, CameraNo, type, use_merged)
+%   type: 'Instantaneous', 'Calibrated', or 'Merged'
+%   use_merged: true for merged data, false for traditional camera data
+
+if nargin < 4
+    type = 'Instantaneous'; % Default for backward compatibility
+end
+if nargin < 5
+    use_merged = false; % Default to traditional camera data
+end
 
 if setup.pipeline.vortex_video_gamma
     fprintf('Creating vortex video for base: %s at %s\n', setup.directory.base, datetime('now'));
     
-
+    % Get data paths using centralized function
+    paths = get_data_paths(setup, type, endpoint, CameraNo, use_merged);
+    dataloc = paths.data_dir;
+    output_dir = fullfile(paths.video_dir, 'Vortex_Analysis');
     
-    % Set up data location
-    dataloc = fullfile(setup.directory.base, 'CalibratedPIV', num2str(setup.imProperties.imageCount), ...
-                      ['Cam', num2str(CameraNo)], 'Instantaneous', endpoint);
-    
-    % Set up output directory
-    output_dir = fullfile(setup.directory.base, 'Videos', num2str(setup.imProperties.imageCount), ...
-                         ['Cam', num2str(CameraNo)], 'Vortex_Analysis');
     if ~exist(output_dir, 'dir')
         mkdir(output_dir);
     end
