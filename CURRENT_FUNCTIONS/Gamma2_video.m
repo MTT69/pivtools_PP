@@ -1,15 +1,19 @@
-function Gamma2_video(setup, endpoint, CameraNo, type, use_merged)
+function Gamma2_video(setup, endpoint, CameraNo, type, use_merged, acq_freq)
 % gamma2_VIDEO - Function to create gamma2 field visualization video
 %   This function generates a video showing instantaneous gamma2 field
 %
-%   Usage: Gamma2_video(setup, endpoint, CameraNo, type)
+%   Usage: Gamma2_video(setup, endpoint, CameraNo, type, use_merged, acq_freq)
 %   type: 'Instantaneous', 'Calibrated', or 'Merged'
+%   acq_freq: acquisition frequency in Hz
 
 if nargin < 4
     type = 'Instantaneous'; % Default for backward compatibility
 end
 if nargin < 5
     use_merged = false;
+end
+if nargin < 6
+    error('Acquisition frequency (acq_freq) must be provided.');
 end
 
 if setup.pipeline.gamma2_video
@@ -42,7 +46,7 @@ if setup.pipeline.gamma2_video
         
         % Pre-calculate gamma2 limits for consistent colorbar scaling
         fprintf('Calculating gamma2 limits for consistent scaling...\n');
-        sample_frames = 1:50:setup.imProperties.imageCount; % Sample every 50th frame
+        sample_frames = 1:50;
         all_gamma2_values = [];
         
         for sample_idx = 1:length(sample_frames)
@@ -51,10 +55,6 @@ if setup.pipeline.gamma2_video
             u_sample = VelData_sample.piv_result(i).ux;
             v_sample = VelData_sample.piv_result(i).uy;
             
-            % Apply spatial smoothing to reduce noise
-            sigma = 1; % Adjust smoothing strength
-%             u_smooth = imgaussfilt(u_sample, sigma, 'FilterDomain', 'spatial');
-%             v_smooth = imgaussfilt(v_sample, sigma, 'FilterDomain', 'spatial');
             u_smooth = u_sample;
             v_smooth = v_sample;
             
@@ -93,23 +93,19 @@ if setup.pipeline.gamma2_video
         open(v);
         
         % Process each frame
-        for imNo = 1:setup.imProperties.imageCount
+        for imNo = 1:setup.imProperties.caseImages
             % Load velocity data
             VelData = load(fullfile(dataloc, sprintf('%05d.mat', imNo)));
-            u = VelData.piv_result(i).ux;
+            u_vel = VelData.piv_result(i).ux;
             v_vel = VelData.piv_result(i).uy;
             
-            % Apply spatial smoothing to reduce noise
-            sigma = 1; % Adjust smoothing strength
-            u_smooth = imgaussfilt(u, sigma, 'FilterDomain', 'spatial');
-            v_smooth = imgaussfilt(v_vel, sigma, 'FilterDomain', 'spatial');
             
             % Apply mask to smoothed data
-            u_smooth(b_mask) = NaN;
-            v_smooth(b_mask) = NaN;
+            u_vel(b_mask) = NaN;
+            v_vel(b_mask) = NaN;
             
             % Calculate gamma2 field using smoothed data
-            gammaField = gamma2(x, y, u_smooth, v_smooth, 10);
+            gammaField = gamma2(x, y, u_vel, v_vel, 10);
             gammaField(b_mask) = 0;
             
             % Create figure using plot_save_mask with return_figure option
@@ -124,6 +120,8 @@ if setup.pipeline.gamma2_video
                           gamma2_lower_limit, gamma2_upper_limit, true);
             
             set(fig, 'Visible', 'off');
+            set(fig, 'Units', 'Normalized', 'OuterPosition', [0, 0.04, 1, 0.96]);
+
             
             % Get current axes
             ax = gca;
@@ -138,10 +136,10 @@ if setup.pipeline.gamma2_video
             cb.Label.Interpreter = 'latex';
             cb.Label.FontSize = setup.figures.labelFontSize;
             
-            % % Update title
-            % title(ax, sprintf('Instantaneous $\\Gamma_1$ Field\\nFrame %d/%d, Run %d', ...
-            %              imNo, setup.imProperties.imageCount, i), ...
-            %       'Interpreter', 'latex', 'FontSize', setup.figures.titleFontSize);
+            % Add time to title
+            time_s = (imNo - 1) / acq_freq;
+            title(ax, sprintf('gamma2 Field, Time: %.3fs', time_s), ...
+                  'Interpreter', 'latex', 'FontSize', setup.figures.titleFontSize);
             
             % Capture frame
             frame = getframe(fig);
@@ -152,7 +150,7 @@ if setup.pipeline.gamma2_video
             
             % Progress indicator
             if mod(imNo, 10) == 0
-                fprintf('Processed frame %d/%d\n', imNo, setup.imProperties.imageCount);
+                fprintf('Processed frame %d/%d\n', imNo, setup.imProperties.caseImages);
             end
         end
         
@@ -160,60 +158,7 @@ if setup.pipeline.gamma2_video
         close(v);
         fprintf('Video saved: %s\n', video_filename);
         
-        % Create a sample frame for reference
-        sample_frame_dir = fullfile(output_dir, 'Sample_Frames');
-        if ~exist(sample_frame_dir, 'dir')
-            mkdir(sample_frame_dir);
-        end
-        
-        mid_frame = round(setup.imProperties.imageCount / 2);
-        VelData = load(fullfile(dataloc, sprintf('%05d.mat', mid_frame)));
-        u = VelData.piv_result(i).ux;
-        v_vel = VelData.piv_result(i).uy;
-        
-        % Apply smoothing for sample frame
-        sigma = 1;
-        u_smooth = imgaussfilt(u, sigma, 'FilterDomain', 'spatial');
-        v_smooth = imgaussfilt(v_vel, sigma, 'FilterDomain', 'spatial');
-        u_smooth(b_mask) = NaN;
-        v_smooth(b_mask) = NaN;
-        
-        gammaField = gamma2(x, y, u_smooth, v_smooth, 10);
-        gammaField(b_mask) = 0;
-        
-        % Create sample frame using traditional save method
-        sample_variableName = sprintf('SampleFramgamma2Run%d', i);
-        
-        plot_save_mask(gammaField, b_mask, xcorners, ycorners, ...
-                      setup.figures.axisFontSize, setup.figures.titleFontSize, ...
-                      sample_frame_dir, setup.instantaneous.runs, ...
-                      [setup.instantaneous.windowSize(i,1), setup.instantaneous.windowSize(i,2)], ...
-                      i, sample_variableName, 'Inst', sample_frame_dir, ...
-                      gamma2_lower_limit, gamma2_upper_limit);
-        
-        % Load and enhance sample frame
-        sample_fig_filename = fullfile(sample_frame_dir, [sample_variableName, num2str(setup.instantaneous.windowSize(i,1)), 'x', num2str(setup.instantaneous.windowSize(i,2)), '.fig']);
-        fig = openfig(sample_fig_filename);
-        ax = gca;
-        
-        title(ax, sprintf('Sample Frame: Instantaneous Gamma2 Field\\nFrame %d, Run %d', ...
-                     mid_frame, i), ...
-              'Interpreter', 'latex', 'FontSize', setup.figures.titleFontSize);
-        
-        xlabel(ax, 'x [mm]', 'Interpreter', 'latex', 'FontSize', setup.figures.labelFontSize);
-        ylabel(ax, 'y [mm]', 'Interpreter', 'latex', 'FontSize', setup.figures.labelFontSize);
-        
-        cb = colorbar(ax);
-        cb.Label.String = 'Gamma2';
-        cb.Label.Interpreter = 'latex';
-        cb.Label.FontSize = setup.figures.labelFontSize;
-        
-        % Save enhanced sample frame
-        enhanced_base = sprintf('SampleFramegamma2Run%d_%dx%d_enhanced', i, setup.instantaneous.windowSize(i,1), setup.instantaneous.windowSize(i,2));
-        saveas(fig, fullfile(sample_frame_dir, [enhanced_base, '.fig']));
-        saveas(fig, fullfile(sample_frame_dir, [enhanced_base, '.png']));
-        saveas(fig, fullfile(sample_frame_dir, [enhanced_base, '.eps']));
-        close(fig);
+       
     end
     
     fprintf('gamma2 video generation completed at %s\n', datetime('now'));

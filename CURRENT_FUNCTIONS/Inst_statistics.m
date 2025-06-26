@@ -1,4 +1,4 @@
-function Inst_statistics(setup,Type,endpoint)
+function Inst_statistics(setup,Type,endpoint, use_merged_data)
 
     % /******************************************************************************
 %  * Function: Perform_PIV_statistics_inst
@@ -95,14 +95,12 @@ function Inst_statistics(setup,Type,endpoint)
         % Loop through all cameras
         for CameraNo = 1:setup.imProperties.cameraCount
             fprintf('Processing Camera %d of %d\n', CameraNo, setup.imProperties.cameraCount);
+            if use_merged_data
+                dataloc = fullfile(setup.directory.base, 'Merged', type, endpoint);
             
-            if strcmp(Type,'Calibrated')        
+            else      
                 dataloc = (fullfile(setup.directory.base, 'CalibratedPIV', num2str(setup.imProperties.imageCount),['Cam', num2str(CameraNo)], 'Instantaneous',endpoint));
-                
-            elseif strcmp(Type, 'Uncalibrated')
-                dataloc = (fullfile(setup.directory.base, 'UncalibratedPIV', num2str(setup.imProperties.imageCount),['Cam', num2str(CameraNo)], 'Instantaneous'));
-            else
-                error('Incompatible type for instantaneous statistics');
+               
                 
             end
         
@@ -144,20 +142,12 @@ function Inst_statistics(setup,Type,endpoint)
             mean_U = U_gridTotal / setup.imProperties.imageCount;
             mean_V = V_gridTotal / setup.imProperties.imageCount;
             divergenceField = divergenceField/setup.imProperties.imageCount;
-            for k = 1:numel(mean_U)
-                if mean_U(k)<0
-                    RMS_U(k) = -RMS_U(k);
-                end
-                if mean_V(k) <0
-                    RMS_V(k) = - RMS_V(k);
-                end
-            end
                 
             Setup_parpool(setup, 'Processes')
             parfor ImNo = 1:setup.imProperties.imageCount
                 VelData = load(fullfile(dataloc, [num2str(sprintf(setup.instantaneous.nameConvention{1}, ImNo))]));
-                Ufluc=(VelData.piv_result(i).ux)-RMS_U;
-                Vfluc=(VelData.piv_result(i).uy)-RMS_V;
+                Ufluc=(VelData.piv_result(i).ux)-mean_U;
+                Vfluc=(VelData.piv_result(i).uy)-mean_V;
                 U_prime_Uprime_total=U_prime_Uprime_total+(Ufluc.*Ufluc);    
                 V_prime_Vprime_total=V_prime_Vprime_total+(Vfluc.*Vfluc);
                 U_prime_Vprime_total=U_prime_Vprime_total+(Vfluc.*Ufluc);
@@ -167,8 +157,12 @@ function Inst_statistics(setup,Type,endpoint)
             U_prime_Vprime_mean=U_prime_Vprime_total/setup.imProperties.imageCount;
             mean_Vorticity = vorticity_total/setup.imProperties.imageCount;
         
-
-            directory=fullfile(setup.directory.base, 'Statistics', num2str(setup.imProperties.imageCount), ['Cam' num2str(CameraNo)], 'Instantaneous', Type, endpoint);
+            if use_merged_data
+                directory = fullfile(setup.directory.base, 'Statistics', 'Merged', Type, endpoint, 'meanStats');
+            else
+               
+                directory=fullfile(setup.directory.base, 'Statistics', num2str(setup.imProperties.imageCount), ['Cam' num2str(CameraNo)], Type, endpoint, 'meanStats');
+            end
             if ~exist(directory,'dir')
                 mkdir(directory)
             end
@@ -184,44 +178,37 @@ function Inst_statistics(setup,Type,endpoint)
             variableName ='RMS V ';
             plot_save_mask(RMS_V, b_mask,xcorners,ycorners,setup.figures.axisFontSize,setup.figures.titleFontSize,directory,setup.instantaneous.runs,[setup.instantaneous.windowSize(i,1), setup.instantaneous.windowSize(i,2)],i, variableName, 'Inst','dir');
     
-            
+
             figure('Visible', 'off')
             fig = gcf;
             ax1 = axes;
             set(fig, 'Units', 'Normalized', 'OuterPosition', [0, 0.04, 1, 0.96]);
-            streamslice(Co_ords.Co_ords(i).x, Co_ords.Co_ords(i).y,(mean_U),(mean_V), 7)
+
+            % Improved streamlines with better styling
+            h = streamslice(Co_ords.Co_ords(i).x, Co_ords.Co_ords(i).y, mean_U, mean_V, 7);
+            set(h, 'Color', 'k');
             title([Type, ' Streamlines ' num2str(setup.instantaneous.windowSize(i,1)) 'x' num2str(setup.instantaneous.windowSize(i,2))], 'FontSize',setup.figures.titleFontSize,'Interpreter', 'latex');
             daspect([1 1 1]);
             fig = gcf;
             xlim([Co_ords.Co_ords(i).x(1,1) Co_ords.Co_ords(i).x(1,end)]);
             ylim([Co_ords.Co_ords(i).y(end,1) Co_ords.Co_ords(i).y(1,1)]);
-            set(gca, 'YDir', 'normal', 'FontSize', setup.figures.axisFontSize, 'LineWidth', 1.5, 'TickLabelInterpreter', 'latex'); % Thicker axes, LaTeX labels
-            mask = double(b_mask);
-            mask(mask==1) =inf;
-            ax2 = axes;
-            j = imagesc(xcorners,ycorners, mask);
-            set(j, 'AlphaData', isinf(mask));
-            set(gca, 'YDir', 'normal', 'FontSize', setup.figures.axisFontSize, 'LineWidth', 1.5, 'TickLabelInterpreter', 'latex'); % Thicker axes, LaTeX labels            colormap(ax2, [0 0 0]);
-            daspect(ax2, [1 1 1]);
-            
-            % Align axes
-            linkaxes([ax1, ax2]);
-            
-            % Hide the second set of axes
-            ax2.Visible = 'off';
-            ax2.XTick = [];
-            ax2.YTick = [];
-            
-            % Set proper positioning of axes
-            ax2.Position = ax1.Position;
-            
-            % Make sure the figure aspect ratio is consistent
-            daspect([1 1 1]);
-            
-            % Remove extra space between plots
-            ax1.XLim = ax2.XLim;
-            ax1.YLim = ax2.YLim;
-            
+            set(gca, 'YDir', 'normal', 'FontSize', setup.figures.axisFontSize, 'LineWidth', 1.5, 'TickLabelInterpreter', 'latex');
+
+            % Hold on to add mask layer
+            hold(ax1, 'on');
+
+            % Create mask overlay with light grey color (same as plot_save_mask)
+            mask_vis = double(b_mask);
+            [rows, cols] = size(mask_vis);
+            mask_rgb = cat(3, ones(rows, cols) * 0.8, ones(rows, cols) * 0.8, ones(rows, cols) * 0.8); % Light grey RGB
+
+            % Display the mask as an RGB image overlay
+            j = image(ax1, xcorners, ycorners, mask_rgb);
+            set(j, 'AlphaData', mask_vis * 0.7); % Show masked areas with transparency
+
+            daspect(ax1, [1 1 1]);
+            hold(ax1, 'off');
+
             saveas(fig, fullfile(directory, [ '_Mean_streamlines ' num2str(setup.instantaneous.windowSize(i,1)) 'x' num2str(setup.instantaneous.windowSize(i,2)) '.jpg']));
             saveas(fig, fullfile(directory, ['_Mean_streamlines ' num2str(setup.instantaneous.windowSize(i,1)) 'x' num2str(setup.instantaneous.windowSize(i,2)) '.epsc']));
             saveas(fig, fullfile(directory, ['_Mean_streamlines ' num2str(setup.instantaneous.windowSize(i,1)) 'x' num2str(setup.instantaneous.windowSize(i,2)) '.fig']));
@@ -230,79 +217,89 @@ function Inst_statistics(setup,Type,endpoint)
             delete(j);
 
 
-%             %TODO only works for square imagery
-%             figure('Visible', 'off')
-%             center_col = floor(size(mean_U, 2) / 2);
-%             half_width = floor(size(mean_U, 1) / 2);
-%             U_cropped = mean_U(:, center_col - half_width : center_col + half_width);
-%             V_cropped = mean_V(:, center_col - half_width : center_col + half_width);
-%             x_co_ords_cropped = Co_ords.Co_ords(i).x(:, center_col - half_width : center_col + half_width);
-%             y_co_ords_cropped = Co_ords.Co_ords(i).y(:, center_col - half_width : center_col + half_width);
-%             xcorners_cropped = [x_co_ords_cropped(1,1), x_co_ords_cropped(1,end)];
-%             ycorners_cropped = [y_co_ords_cropped(1,1), y_co_ords_cropped(end, end)];
-%             b_mask_cropped = b_mask(:, center_col - half_width : center_col + half_width);
-%             vorticity_cropped = mean_Vorticity(:, center_col - half_width : center_col + half_width);
-%             upsampled_mean_u = imresize(U_cropped, 5, "bicubic");
-%             upsampled_mean_v = imresize(V_cropped, 5, "bicubic");
-%             upsampled_b_mask = imresize(b_mask_cropped, 5, "nearest");
-%             upsampled_vorticity = imresize(vorticity_cropped, 5, "bicubic");
-% 
-%             upsample_cat_v = cat(3, -upsampled_mean_v, upsampled_mean_u);
-%             upsample_cat_v = perform_vf_normalization(upsample_cat_v);
-% 
-% 
-% 
-%             options.spot_size = 2;
-%             options.flow_correction = 1;
-% 
-%             lic = perform_lic(upsample_cat_v, 12, options);
-%             lic(upsampled_b_mask==1) =0;
-%             upsampled_vorticity(upsampled_b_mask==1)=0;
-% 
-%             ax1 = axes;
-%             A = imagesc(xcorners_cropped, ycorners_cropped,lic);
-%             colormap(ax1, gray);
-%             daspect(ax1, [1 1 1]);
-%             alphaData_lic = lic ~= 0; % True for non-zero values, false for zeros
-%             set(A, 'AlphaData', alphaData_lic);
-%             set(gca, 'YDir', 'normal', 'FontSize', setup.figures.axisFontSize, 'LineWidth', 1.5, 'TickLabelInterpreter', 'latex'); % Thicker axes, LaTeX labels            colormap(ax2, [0 0 0]);
-%             hold on;
-%             ax2 = axes;
-%             lower_limit = prctile(upsampled_vorticity(:),5);
-%             upper_limit = prctile(upsampled_vorticity(:),95);
-%             B = imagesc(xcorners_cropped, ycorners_cropped,upsampled_vorticity,[lower_limit, upper_limit]);
-%             colormap(ax2, redbluezero(lower_limit, upper_limit));
-%             daspect(ax2, [1 1 1]);
-%             colorbar;
-%             alphaData = ~isnan(upsampled_vorticity);
-%             set(B, 'AlphaData', alphaData * 0.5); % Use 0.5 transparency for non-zero values
-%             set(gca, 'YDir', 'normal', 'FontSize', setup.figures.axisFontSize, 'LineWidth', 1.5, 'TickLabelInterpreter', 'latex'); % Thicker axes, LaTeX labels            colormap(ax2, [0 0 0]);
-% 
-%             % % Align axes
-%             linkaxes([ax1, ax2]);
-%             % 
-%             % % Hide the second set of axes
-%             ax2.Visible = 'off';
-%             ax2.XTick = [];
-%             ax2.YTick = [];
-%             ax2.HitTest = 'off'; % Ignore mouse clicks on ax2
-%             ax2.PickableParts = 'none'; % Prevent ax2 from capturing interactions
-% 
-%             ax2.Position = ax1.Position;
-%             daspect([1 1 1]);
-%             % 
-%             % % Remove extra space between plots
-% 
-%             ax1.XLim = ax2.XLim;
-%             ax1.YLim = ax2.YLim;
-%             set(gcf, 'Units', 'Normalized', 'OuterPosition', [0, 0.04, 1, 0.96]);
-% 
-%             title([Type, '_Vorticity_LIC ' num2str(setup.instantaneous.windowSize(i,1)) 'x' num2str(setup.instantaneous.windowSize(i,2))], 'FontSize',setup.figures.titleFontSize,'Interpreter', 'latex');
-%             saveas(gcf, fullfile(directory, [ '_vorticity_lic ' num2str(setup.instantaneous.windowSize(i,1)) 'x' num2str(setup.instantaneous.windowSize(i,2)) '.jpg']));
-%             saveas(gcf, fullfile(directory, [ '_vorticity_lic ' num2str(setup.instantaneous.windowSize(i,1)) 'x' num2str(setup.instantaneous.windowSize(i,2)) '.epsc']));
-%             saveas(gcf, fullfile(directory, ['_vorticity_lic ' num2str(setup.instantaneous.windowSize(i,1)) 'x' num2str(setup.instantaneous.windowSize(i,2)) '.fig']));
-% 
-%             close(gcf)
+            [ny, nx] = size(mean_U);
+            if ny <= nx
+                square_size = ny;
+                x_start = floor((nx - ny)/2) + 1;
+                x_end = x_start + square_size - 1;
+                y_start = 1;
+                y_end = ny;
+            else
+                square_size = nx;
+                y_start = floor((ny - nx)/2) + 1;
+                y_end = y_start + square_size - 1;
+                x_start = 1;
+                x_end = nx;
+            end
+
+            % Crop all arrays to the central square
+            U_cropped = mean_U(y_start:y_end, x_start:x_end);
+            V_cropped = mean_V(y_start:y_end, x_start:x_end);
+            b_mask_cropped = b_mask(y_start:y_end, x_start:x_end);
+            vorticity_cropped = mean_Vorticity(y_start:y_end, x_start:x_end);
+            x_co_ords_cropped = Co_ords.Co_ords(i).x(y_start:y_end, x_start:x_end);
+            y_co_ords_cropped = Co_ords.Co_ords(i).y(y_start:y_end, x_start:x_end);
+            xcorners_cropped = [x_co_ords_cropped(1,1), x_co_ords_cropped(1,end)];
+            ycorners_cropped = [y_co_ords_cropped(1,1), y_co_ords_cropped(end, end)];
+
+            % Upsample
+            upsample_factor = 5;
+            upsampled_mean_u = imresize(U_cropped, upsample_factor, "bicubic");
+            upsampled_mean_v = imresize(V_cropped, upsample_factor, "bicubic");
+            upsampled_b_mask = imresize(b_mask_cropped, upsample_factor, "nearest");
+            upsampled_vorticity = imresize(vorticity_cropped, upsample_factor, "bicubic");
+
+            upsample_cat_v = cat(3, -upsampled_mean_v, upsampled_mean_u);
+            upsample_cat_v = perform_vf_normalization(upsample_cat_v);
+
+            options.spot_size = 2;
+            options.flow_correction = 1;
+
+            lic = perform_lic(upsample_cat_v, 12, options);
+            lic(upsampled_b_mask==1) = 0;
+            upsampled_vorticity(upsampled_b_mask==1) = 0;
+
+            % Mask LIC and vorticity arrays
+            lic_masked = lic;
+            lic_masked(upsampled_b_mask==1) = NaN;
+
+
+            % Plot with improved style (like plot_save_mask)
+            figure('Visible', 'off');
+            fig = gcf;
+            set(fig, 'Units', 'Normalized', 'OuterPosition', [0, 0.04, 1, 0.96]);
+            ax1 = axes;
+            hold(ax1, 'on');
+
+            % 1. LIC background (masked)
+            A = imagesc(ax1, xcorners_cropped, ycorners_cropped, lic_masked);
+            colormap(ax1, gray);
+            set(A, 'AlphaData', ~isnan(lic_masked));
+
+            % 2. Mask overlay (draw last, flip vertically for correct orientation with YDir normal)
+            mask_vis = double(upsampled_b_mask);
+            [rows, cols] = size(mask_vis);
+            mask_rgb = cat(3, ones(rows, cols) * 0.8, ones(rows, cols) * 0.8, ones(rows, cols) * 0.8);
+            j = image(ax1, xcorners_cropped, ycorners_cropped, (mask_rgb));
+            set(j, 'AlphaData', (mask_vis) * 0.7);
+
+            % Axis and colorbar settings
+            daspect(ax1, [1 1 1]);
+            set(ax1, 'YDir', 'normal', 'FontSize', setup.figures.axisFontSize, ...
+                'LineWidth', 1.5, 'TickLabelInterpreter', 'latex');
+            title( 'Line Integral Convolutions', ...
+                'FontSize', setup.figures.titleFontSize, 'Interpreter', 'latex');
+
+            hold(ax1, 'off');
+            set(gcf, 'Units', 'Normalized', 'OuterPosition', [0, 0.04, 1, 0.96]);
+
+            saveas(gcf, fullfile(directory, [ '_vorticity_lic ' num2str(setup.instantaneous.windowSize(i,1)) ...
+                'x' num2str(setup.instantaneous.windowSize(i,2)) '.jpg']));
+            saveas(gcf, fullfile(directory, [ '_vorticity_lic ' num2str(setup.instantaneous.windowSize(i,1)) ...
+                'x' num2str(setup.instantaneous.windowSize(i,2)) '.epsc']));
+            saveas(gcf, fullfile(directory, ['_vorticity_lic ' num2str(setup.instantaneous.windowSize(i,1)) ...
+                'x' num2str(setup.instantaneous.windowSize(i,2)) '.fig']));
+            close(gcf)
 
 
 

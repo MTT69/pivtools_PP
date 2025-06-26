@@ -1,4 +1,4 @@
-function plot_maker_instantaneous(setup, CameraNo, Type, customTitle, xLabel, yLabel, endpoint, use_merged)
+function plot_maker_mean(setup, CameraNo, Type, customTitle, xLabel, yLabel, endpoint, use_merged)
 % PLOT_MAKER_INSTANTANEOUS Creates instantaneous plots from PIV data with mask functionality
     
     if setup.pipeline.manual_plots

@@ -1,15 +1,19 @@
-function LIC_video(setup, endpoint, CameraNo, type, use_merged)
+function LIC_video(setup, endpoint, CameraNo, type, use_merged, acq_freq)
 % LIC_VIDEO - Function to create Line Integral Convolution visualization video
 %   This function generates a video showing instantaneous flow using LIC technique
 %
-%   Usage: LIC_video(setup, endpoint, CameraNo, type)
+%   Usage: LIC_video(setup, endpoint, CameraNo, type, use_merged, acq_freq)
 %   type: 'Instantaneous', 'Calibrated', or 'Merged'
+%   acq_freq: acquisition frequency in Hz
 
 if nargin < 4
     type = 'Instantaneous'; % Default for backward compatibility
 end
 if nargin < 5
     use_merged = false;
+end
+if nargin < 6
+    error('Acquisition frequency (acq_freq) must be provided.');
 end
 
 if setup.pipeline.lic_video
@@ -67,7 +71,7 @@ if setup.pipeline.lic_video
         upsample_factor = 5; % Adjust as needed
         
         % Process each frame
-        for imNo = 1:setup.imProperties.imageCount
+        for imNo = 1:setup.imProperties.caseImages
             % Load velocity data
             VelData = load(fullfile(dataloc, sprintf('%05d.mat', imNo)));
             u = VelData.piv_result(i).ux;
@@ -107,6 +111,7 @@ if setup.pipeline.lic_video
             % Create figure
             fig = figure('Visible', 'off');
             set(fig, 'Units', 'Normalized', 'OuterPosition', [0, 0.04, 1, 0.96]);
+
             
             % Create LIC visualization
             ax = axes;
@@ -125,7 +130,8 @@ if setup.pipeline.lic_video
             ylim(ycorners_cropped);
             
             % Add title and labels
-            title('Instantaneous Line Integral Convolution', ...
+            time_s = (imNo - 1) / acq_freq;
+            title(ax, sprintf('Instantaneous Line Integral Convolution, Time: %.3fs', time_s), ...
                   'Interpreter', 'latex', 'FontSize', setup.figures.titleFontSize);
             xlabel('x [mm]', 'Interpreter', 'latex', 'FontSize', setup.figures.labelFontSize);
             ylabel('y [mm]', 'Interpreter', 'latex', 'FontSize', setup.figures.labelFontSize);
@@ -139,7 +145,7 @@ if setup.pipeline.lic_video
             
             % Progress indicator
             if mod(imNo, 10) == 0
-                fprintf('Processed frame %d/%d\n', imNo, setup.imProperties.imageCount);
+                fprintf('Processed frame %d/%d\n', imNo, setup.imProperties.caseImages);
             end
         end
         
@@ -201,8 +207,10 @@ if setup.pipeline.lic_video
         xlim(xcorners_cropped);
         ylim(ycorners_cropped);
         
-        title(sprintf('Sample Frame: Line Integral Convolution\\nFrame %d, Run %d', ...
-                     mid_frame, i), ...
+        % Add time to sample frame title
+        time_s = (mid_frame - 1) / acq_freq;
+        title(sprintf('Sample Frame: Line Integral Convolution\\nFrame %d, Run %d, Time: %.3fs', ...
+                     mid_frame, i, time_s), ...
               'Interpreter', 'latex', 'FontSize', setup.figures.titleFontSize);
         xlabel('x [mm]', 'Interpreter', 'latex', 'FontSize', setup.figures.labelFontSize);
         ylabel('y [mm]', 'Interpreter', 'latex', 'FontSize', setup.figures.labelFontSize);

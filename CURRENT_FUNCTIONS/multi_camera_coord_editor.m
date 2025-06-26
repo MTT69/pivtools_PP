@@ -2,7 +2,7 @@ function multi_camera_coord_editor(setup, type, endpoint, use_merged)
     % MULTI_CAMERA_COORD_EDITOR - Comprehensive coordinate editor for multiple cameras
     % Inputs:
     %   setup - Setup structure containing camera configuration and paths
-    %   type - 'Instantaneous' or 'Ensemble' data type (optional, default: 'Instantaneous')
+    %   type - 'Instantaneous', 'Ensemble', or 'Merged' data type (optional, default: 'Instantaneous')
     %   endpoint - endpoint subfolder (optional, default: '')
     %   use_merged - logical, true to use merged data, false for traditional camera data (optional, default: false)
     
@@ -16,6 +16,10 @@ function multi_camera_coord_editor(setup, type, endpoint, use_merged)
         use_merged = false;
     end
     
+    if ~setup.pipeline.co_ords_complex
+        return;
+    end
+    
     % Validate setup structure
     if ~isfield(setup, 'imProperties') || ~isfield(setup.imProperties, 'cameraCount')
         error('setup.imProperties.cameraCount not found. Please ensure setup structure is properly configured.');
@@ -23,71 +27,40 @@ function multi_camera_coord_editor(setup, type, endpoint, use_merged)
     
     camera_count = setup.imProperties.cameraCount;
     
-    % Determine which data type to process
-    process_instantaneous =  setup.pipeline.instantaneous_cords_multi;
-    process_ensemble =  setup.pipeline.ensemble_cords_multi;
-    
-    if ~process_instantaneous && ~process_ensemble
-        return
+    % Get runs and nameConvention based on type
+    if strcmp(type, 'Ensemble')
+        runs = setup.ensemble.runs;
+    else % Instantaneous or Merged
+        runs = setup.instantaneous.runs;
     end
     
-    % Process instantaneous data
-    if process_instantaneous
-        fprintf('\n=== Processing Instantaneous Data ===\n');
-        for run_idx = 1:length(setup.instantaneous.runs)
-            run = setup.instantaneous.runs(run_idx);
-            fprintf('Processing instantaneous run %d...\n', run);
-            
-            % Load data for all cameras
-            camera_data = load_all_camera_data(setup, camera_count, run, 'Instantaneous', endpoint, use_merged);
-            
-            % Create multi-camera visualization
-            create_multi_camera_display(camera_data, setup, run, 'Instantaneous', camera_count);
-            
-            % Interactive coordinate editing
-            updated_coords = interactive_coordinate_editor(camera_data, setup, run, 'Instantaneous', camera_count);
-            
-            % Save updated coordinates
-            save_updated_coordinates(updated_coords, setup, run, 'Instantaneous', camera_count);
-            
-            % Show confirmation
-            show_confirmation_display(updated_coords, setup, run, 'Instantaneous', camera_count);
-            
-            if run_idx < length(setup.instantaneous.runs)
-                input('Press Enter to continue to next instantaneous run...');
-            end
+    fprintf('Starting multi-camera coordinate editing for %s runs...\n', type);
+    
+    for run_idx = 1:length(runs)
+        run = runs(run_idx);
+        fprintf('Processing %s run %d...\n', type, run);
+        
+        % Load data for all cameras
+        camera_data = load_all_camera_data(setup, camera_count, run, type, endpoint, use_merged);
+        
+        % Create multi-camera visualization
+        create_multi_camera_display(camera_data, setup, run, type, camera_count);
+        
+        % Interactive coordinate editing
+        updated_coords = interactive_coordinate_editor(camera_data, setup, run, type, camera_count);
+        
+        % Save updated coordinates
+        save_updated_coordinates(updated_coords, setup, run, type, camera_count);
+        
+        % Show confirmation
+        show_confirmation_display(updated_coords, setup, run, type, camera_count);
+        
+        if run_idx < length(runs)
+            input('Press Enter to continue to next run...');
         end
     end
     
-    % Process ensemble data
-    if process_ensemble
-        fprintf('\n=== Processing Ensemble Data ===\n');
-        for run_idx = 1:length(setup.ensemble.runs)
-            run = setup.ensemble.runs(run_idx);
-            fprintf('Processing ensemble run %d...\n', run);
-            
-            % Load data for all cameras
-            camera_data = load_all_camera_data(setup, camera_count, run, 'Ensemble', endpoint, use_merged);
-            
-            % Create multi-camera visualization
-            create_multi_camera_display(camera_data, setup, run, 'Ensemble', camera_count);
-            
-            % Interactive coordinate editing
-            updated_coords = interactive_coordinate_editor(camera_data, setup, run, 'Ensemble', camera_count);
-            
-            % Save updated coordinates
-            save_updated_coordinates(updated_coords, setup, run, 'Ensemble', camera_count);
-            
-            % Show confirmation
-            show_confirmation_display(updated_coords, setup, run, 'Ensemble', camera_count);
-            
-            if run_idx < length(setup.ensemble.runs)
-                input('Press Enter to continue to next ensemble run...');
-            end
-        end
-    end
-    
-    fprintf('\nMulti-camera coordinate editing completed successfully at %s\n', datetime('now'));
+    fprintf('Multi-camera coordinate editing complete for all %s runs.\n', type);
 end
 
 function camera_data = load_all_camera_data(setup, camera_count, run, data_type, endpoint, use_merged)

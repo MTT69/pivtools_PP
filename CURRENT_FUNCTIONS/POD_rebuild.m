@@ -1,14 +1,14 @@
-function POD_rebuild(setup, CameraNo, full_domain_toggle, type, use_merged)
+function POD_rebuild(setup, CameraNo, domain, type, use_merged)
     % POD_rebuild - Reconstructs flow field using POD modes based on noise analysis
     % Inputs:
     %   setup - setup structure containing all parameters
     %   CameraNo - camera number
-    %   full_domain_toggle - logical, true for full domain POD, false for cavity only
+    %   domain - 'Above', 'Below', or 'Full'
     %   type - 'Instantaneous', 'Calibrated', or 'Merged'
     %   use_merged - logical, true to use merged data, false for traditional camera data
     
     if nargin < 3
-        full_domain_toggle = false; % Default to cavity-only reconstruction
+        domain = 'Below'; % Default to cavity-only reconstruction
     end
     if nargin < 4
         type = 'Instantaneous'; % Default for backward compatibility
@@ -29,7 +29,7 @@ function POD_rebuild(setup, CameraNo, full_domain_toggle, type, use_merged)
         
         % Load mean statistics
         window_size_str = [num2str(setup.instantaneous.windowSize(i,1)) 'x' num2str(setup.instantaneous.windowSize(i,2))];
-        MeanStats = load(fullfile(stats_dir, ['MeanStats' window_size_str '.mat']));
+        MeanStats = load(fullfile(stats_dir, 'meanStats', ['MeanStats' window_size_str '.mat']));
         
         % Load coordinate data
         Co_ords = load(fullfile(data_dir, 'Co_ords.mat'));
@@ -39,8 +39,22 @@ function POD_rebuild(setup, CameraNo, full_domain_toggle, type, use_merged)
         % Get coordinates
         y = Co_ords.Co_ords(i).y;
         
-        % Find cavity region (y <= 0, not in b_mask)
-        cavity_region = (y <= 0) & ~b_mask;
+        % --- Domain logic copied from POST_POD_multi ---
+        mask = b_mask;
+        row_average = mean(mask, 2);
+        index = find(row_average > 0.8, 1);
+
+        if strcmp(domain, 'Above')
+            mask(index:end, :) = 1;
+        elseif strcmp(domain, 'Below')
+            mask(1:index-1, :) = 1;
+        elseif strcmp(domain, 'Full')
+            mask = mask;
+        end
+        % ------------------------------------------------
+
+        % Find cavity region (y <= 0, not in mask)
+        cavity_region = (y <= 0) & ~mask;
         
         % Calculate uncertainty in cavity region
         u_prime_squared_calibrated = MeanStats.U_prime_Uprime_mean;
@@ -70,19 +84,20 @@ function POD_rebuild(setup, CameraNo, full_domain_toggle, type, use_merged)
         
         % Calculate average cumulative energy across batches (one at a time)
 
-
-        if full_domain_toggle
-            pod_dir = fullfile(stats_dir, 'FullDomain', num2str(1));
-        else
-            pod_dir = fullfile(stats_dir, 'Below', num2str(1));
+        % --- Use domain for POD directory ---
+        pod_dir = fullfile(stats_dir, domain, num2str(1));
+         % Create output directory for reconstructed data
+        output_dir = fullfile(data_dir, 'POD_Reconstructed');
+        if ~exist(output_dir, 'dir')
+            mkdir(output_dir);
         end
+        
+        % --- Save coordinates in output directory before processing images ---
+        save(fullfile(output_dir, 'Co_ords.mat'), '-struct', 'Co_ords');
         [h, w] = size(y);
         Data_POD_current = load(fullfile(pod_dir, ['POD_stats_', num2str(w), 'x', num2str(h), '.mat']));
         
-
         cumulativeEnergy_avg = Data_POD_current.cumulativeEnergy;
-            
-
         
         % Find required number of modes
         k_required = find(cumulativeEnergy_avg > real_signal, 1, 'first');
@@ -95,31 +110,23 @@ function POD_rebuild(setup, CameraNo, full_domain_toggle, type, use_merged)
         % Get grid dimensions
         [h, w] = size(y);
         
-        % Create output directory for reconstructed data
-        output_dir = fullfile(data_dir, 'POD_Reconstructed');
-        if ~exist(output_dir, 'dir')
-            mkdir(output_dir);
-        end
-        
+       
+
         % Process each batch separately
         for batchNum = 1:numBatches
             disp(['Processing batch ', num2str(batchNum), ' of ', num2str(numBatches)]);
             
             % Load POD data for this batch only
-            if full_domain_toggle
-                pod_dir = fullfile(stats_dir, 'FullDomain', num2str(batchNum));
-            else
-                pod_dir = fullfile(stats_dir, 'Below', num2str(batchNum));
-            end
-            if batchNum >1
-                Data_POD_current = load(fullfile(pod_dir, ['POD_stats_', window_size_str, '.mat']));
+            pod_dir = fullfile(stats_dir, domain, num2str(batchNum));
+            if batchNum > 1
+                Data_POD_current = load(fullfile(pod_dir, ['POD_stats_', num2str(w), 'x', num2str(h), '.mat']));
             end
             % Calculate image range for this batch
             start_img = (batchNum - 1) * setup.imProperties.caseImages + 1;
             end_img = min(batchNum * setup.imProperties.caseImages, setup.imProperties.imageCount);
             
             % Process all images in this batch
-            for imNo = start_img:end_img
+            parfor imNo = start_img:end_img
                 kdx = imNo - (batchNum - 1) * setup.imProperties.caseImages;
                 
                 % Load original velocity data
@@ -131,47 +138,39 @@ function POD_rebuild(setup, CameraNo, full_domain_toggle, type, use_merged)
                 u_reconstructed = u_orig;
                 v_reconstructed = v_orig;
                 
-                if full_domain_toggle
-                    % Full domain reconstruction (excluding b_mask)
-                    UV_rec = Data_POD_current.U_svd(:, 1:k_required) * ...
-                            (Data_POD_current.S_svd(1:k_required, 1:k_required) * ...
-                             Data_POD_current.V_svd(kdx, 1:k_required)');
-                    
-                    u_rec = UV_rec(1:h*w) + Data_POD_current.mean_u;
-                    v_rec = UV_rec(h*w+1:end) + Data_POD_current.mean_v;
-                    
-                    u_rec = reshape(u_rec, [h, w]);
-                    v_rec = reshape(v_rec, [h, w]);
-                    
-                    % Apply reconstruction only outside b_mask
-                    reconstruction_mask = ~b_mask;
+                % --- Apply reconstruction based on domain ---
+                UV_rec = Data_POD_current.U_svd(:, 1:k_required) * ...
+                        (Data_POD_current.S_svd(1:k_required, 1:k_required) * ...
+                         Data_POD_current.V_svd(kdx, 1:k_required)');
+                
+                u_rec = UV_rec(1:h*w) + Data_POD_current.mean_u;
+                v_rec = UV_rec(h*w+1:end) + Data_POD_current.mean_v;
+                
+                u_rec = reshape(u_rec, [h, w]);
+                v_rec = reshape(v_rec, [h, w]);
+                
+                if strcmp(domain, 'Full')
+                    reconstruction_mask = ~mask;
                     u_reconstructed(reconstruction_mask) = u_rec(reconstruction_mask);
                     v_reconstructed(reconstruction_mask) = v_rec(reconstruction_mask);
-                    
-                else
-                    % Cavity-only reconstruction
-                    UV_rec = Data_POD_current.U_svd(:, 1:k_required) * ...
-                            (Data_POD_current.S_svd(1:k_required, 1:k_required) * ...
-                             Data_POD_current.V_svd(kdx, 1:k_required)');
-                    
-                    u_rec = UV_rec(1:h*w) + Data_POD_current.mean_u;
-                    v_rec = UV_rec(h*w+1:end) + Data_POD_current.mean_v;
-                    
-                    u_rec = reshape(u_rec, [h, w]);
-                    v_rec = reshape(v_rec, [h, w]);
-                    
-                    % Apply reconstruction only in cavity region
+                elseif strcmp(domain, 'Below')
                     u_reconstructed(cavity_region) = u_rec(cavity_region);
                     v_reconstructed(cavity_region) = v_rec(cavity_region);
+                elseif strcmp(domain, 'Above')
+                    above_region = (y > 0) & ~mask;
+                    u_reconstructed(above_region) = u_rec(above_region);
+                    v_reconstructed(above_region) = v_rec(above_region);
                 end
+                % ----------------------------------------------------------
                 
                 % Save reconstructed data
-                piv_result = VelData.piv_result(i);
-                piv_result.ux = u_reconstructed;
-                piv_result.uy = v_reconstructed;
-                
+                piv_result = VelData.piv_result;
+                piv_result(i).ux = u_reconstructed;
+                piv_result(i).uy = v_reconstructed;
+                piv_result(i).mask = mask; % Store the mask
+
                 save_filename = fullfile(output_dir, [num2str(sprintf('%05d.mat', imNo))]);
-                save(save_filename, 'piv_result');
+                PIVSAVE(save_filename, piv_result);
                 
                 if mod(imNo, 1000) == 0
                     disp(['Processed image ', num2str(imNo), ' of ', num2str(setup.imProperties.imageCount)]);
@@ -189,7 +188,7 @@ function POD_rebuild(setup, CameraNo, full_domain_toggle, type, use_merged)
         POD_params.SNR = SNR;
         POD_params.signal_percentage = real_signal;
         POD_params.noise_percentage = noise_percentage;
-        POD_params.full_domain_toggle = full_domain_toggle;
+        POD_params.domain = domain;
         POD_params.uncertainty = uncertainty;
         POD_params.window_size = [setup.instantaneous.windowSize(i,1), setup.instantaneous.windowSize(i,2)];
         

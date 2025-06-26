@@ -20,7 +20,15 @@ function dot_probe(setup, CameraNo, endpoint, probe_x, probe_y, type, use_merged
         % Get data paths using centralized function
         paths = get_data_paths(setup, type, endpoint, CameraNo, use_merged);
         dataloc = paths.data_dir;
-        
+         if use_merged
+            output_dir = fullfile(setup.directory.base, 'Statistics', 'Merged', type, endpoint, 'DotProbe');
+        else
+            output_dir = fullfile(setup.directory.base, 'Statistics', num2str(setup.imProperties.imageCount), ...
+                                    ['Cam' num2str(CameraNo)], type, endpoint, 'DotProbe');
+        end
+        if ~exist(output_dir, 'dir')
+            mkdir(output_dir);
+        end
         fprintf('Performing dot probe analysis at physical coordinates (%.2f, %.2f) at %s\n', probe_x, probe_y, datetime('now'));
         
         for i = setup.instantaneous.runs
@@ -52,7 +60,36 @@ function dot_probe(setup, CameraNo, endpoint, probe_x, probe_y, type, use_merged
                     end
                 end
             end
-            
+
+            % --- NEW: Plot probe and NaN mask in physical space ---
+            % Use first velocity field for NaN mask
+            nan_mask = ~VelData.piv_result(i).b_mask;
+            x_coords = Co_ords.Co_ords(i).x;
+            y_coords = Co_ords.Co_ords(i).y;
+
+            figure('Units', 'Normalized', 'OuterPosition', [0.1, 0.1, 0.6, 0.7]);
+            imagesc(x_coords(1,:), y_coords(:,1), nan_mask);
+            axis xy;
+            colormap(gray);
+            hold on;
+            % Overlay probe mask
+            [probe_y_idx_grid, probe_x_idx_grid] = find(probe_mask);
+            scatter(x_coords(1,probe_x_idx_grid), y_coords(probe_y_idx_grid,1), 80, 'r', 'filled', 'MarkerEdgeColor','k');
+            % Mark probe center
+            scatter(x_coords(1,probe_x_idx), y_coords(probe_y_idx,1), 120, 'g', 'filled', 'MarkerEdgeColor','k');
+            title(sprintf('Probe Location and NaN Mask (Pass %d)', i), 'FontSize', setup.figures.titleFontSize);
+            xlabel('X (physical units)', 'FontSize', setup.figures.labelFontSize);
+            ylabel('Y (physical units)', 'FontSize', setup.figures.labelFontSize);
+            set(gca, 'FontSize', setup.figures.axisFontSize);
+            hold off;
+            % Save figure
+            probe_fig_name = sprintf('DotProbe_PhysicalSpace_x%.2f_y%.2f_pass%d', probe_x, probe_y, i);
+            saveas(gcf, fullfile(output_dir, [probe_fig_name, '.jpg']));
+            saveas(gcf, fullfile(output_dir, [probe_fig_name, '.epsc']));
+            saveas(gcf, fullfile(output_dir, [probe_fig_name, '.fig']));
+            close(gcf);
+            % --- END NEW ---
+
             % Initialize time history storage
             num_batches = setup.imProperties.imageCount / setup.imProperties.caseImages;
             u_time_history = cell(num_batches, 1);
@@ -92,15 +129,7 @@ function dot_probe(setup, CameraNo, endpoint, probe_x, probe_y, type, use_merged
             end
             
             % Save results
-            if use_merged
-                output_dir = fullfile(setup.directory.base, 'Statistics', 'Merged', type, endpoint, 'DotProbe');
-            else
-                output_dir = fullfile(setup.directory.base, 'Statistics', num2str(setup.imProperties.imageCount), ...
-                                     ['Cam' num2str(CameraNo)], type, endpoint, 'DotProbe');
-            end
-            if ~exist(output_dir, 'dir')
-                mkdir(output_dir);
-            end
+           
             
             filename = sprintf('DotProbe_x%.2f_y%.2f_pass%d.mat', probe_x, probe_y, i);
             save(fullfile(output_dir, filename), 'u_time_history', 'v_time_history', ...

@@ -1,12 +1,16 @@
-function Pressure_video(setup, endpoint, CameraNo, type, use_merged)
+function Pressure_video(setup, endpoint, CameraNo, type, use_merged, acq_freq)
 % PRESSURE_VIDEO - Function to create pressure field visualization video
-%   Usage: Pressure_video(setup, endpoint, CameraNo, type, use_merged)
+%   Usage: Pressure_video(setup, endpoint, CameraNo, type, use_merged, acq_freq)
+%   acq_freq: acquisition frequency in Hz
 
 if nargin < 4
     type = 'Instantaneous'; % Default to Instantaneous for backward compatibility
 end
 if nargin < 5
     use_merged = false; % Default to traditional camera data
+end
+if nargin < 6
+    error('Acquisition frequency (acq_freq) must be provided.');
 end
 
 if setup.pipeline.pressure_video
@@ -45,7 +49,7 @@ if setup.pipeline.pressure_video
         
         % Pre-calculate pressure limits for consistent colorbar scaling
         fprintf('Calculating pressure limits for consistent scaling...\n');
-        sample_frames = 1:50:setup.imProperties.imageCount; % Sample every 50th frame
+        sample_frames = 1:50;
         all_pressure_values = [];
         
         for sample_idx = 1:length(sample_frames)
@@ -94,7 +98,7 @@ if setup.pipeline.pressure_video
         open(v);
         
         % Process each frame
-        for imNo = 1:setup.imProperties.imageCount
+        for imNo = 1:setup.imProperties.caseImages
             try
                 % Load pressure data
                 PressureData = load(fullfile(pressure_dataloc, sprintf('%05d.mat', imNo)));
@@ -112,12 +116,15 @@ if setup.pipeline.pressure_video
                               pressure_lower_limit, pressure_upper_limit, true);
                 
                 set(fig, 'Visible', 'off');
+                set(fig, 'Units', 'Normalized', 'OuterPosition', [0, 0.04, 1, 0.96]);
+
                 
                 % Get current axes
                 ax = gca;
                 
                 % Update title with frame information
-                title(ax, 'Instantaneous Pressure Field', ...
+                time_s = (imNo - 1) / acq_freq;
+                title(ax, sprintf('Instantaneous Pressure Field, Time: %.3fs', time_s), ...
                       'Interpreter', 'latex', 'FontSize', setup.figures.titleFontSize);
                 
                 % Add xlabel and ylabel
@@ -144,7 +151,7 @@ if setup.pipeline.pressure_video
             
             % Progress indicator
             if mod(imNo, 100) == 0
-                fprintf('Processed frame %d/%d\n', imNo, setup.imProperties.imageCount);
+                fprintf('Processed frame %d/%d\n', imNo, setup.imProperties.caseImages);
             end
         end
         
@@ -152,55 +159,9 @@ if setup.pipeline.pressure_video
         close(v);
         fprintf('Video saved: %s\n', video_filename);
         
-        % Create a sample frame for reference
-        sample_frame_dir = fullfile(output_dir, 'Sample_Frames');
-        if ~exist(sample_frame_dir, 'dir')
-            mkdir(sample_frame_dir);
-        end
+       
+            
         
-        % Generate sample frame from middle of sequence
-        mid_frame = round(setup.imProperties.imageCount / 2);
-        try
-            PressureData = load(fullfile(pressure_dataloc, sprintf('%05d.mat', mid_frame)));
-            pressure_field = PressureData.pressure_result.P;
-            
-            % Create sample frame using traditional save method
-            sample_variableName = sprintf('SampleFrame_Pressure_Run%d', i);
-            
-            plot_save_mask(pressure_field, b_mask, xcorners, ycorners, ...
-                          setup.figures.axisFontSize, setup.figures.titleFontSize, ...
-                          sample_frame_dir, setup.instantaneous.runs, ...
-                          [setup.instantaneous.windowSize(i,1), setup.instantaneous.windowSize(i,2)], ...
-                          i, sample_variableName, 'Inst', sample_frame_dir, ...
-                          pressure_lower_limit, pressure_upper_limit);
-            
-            % Load and enhance sample frame
-            sample_fig_filename = fullfile(sample_frame_dir, [sample_variableName, num2str(setup.instantaneous.windowSize(i,1)), 'x', num2str(setup.instantaneous.windowSize(i,2)), '.fig']);
-            fig = openfig(sample_fig_filename);
-            ax = gca;
-            
-            title(ax, sprintf('Sample Frame: Instantaneous Pressure Field\\nFrame %d, Run %d', ...
-                         mid_frame, i), ...
-                  'Interpreter', 'latex', 'FontSize', setup.figures.titleFontSize);
-            
-            xlabel(ax, 'x [mm]', 'Interpreter', 'latex', 'FontSize', setup.figures.labelFontSize);
-            ylabel(ax, 'y [mm]', 'Interpreter', 'latex', 'FontSize', setup.figures.labelFontSize);
-            
-            cb = colorbar(ax);
-            cb.Label.String = 'Pressure [Pa]';
-            cb.Label.Interpreter = 'latex';
-            cb.Label.FontSize = setup.figures.labelFontSize;
-            
-            % Save enhanced sample frame
-            enhanced_base = sprintf('SampleFrame_Pressure_Run%d_%dx%d_enhanced', i, setup.instantaneous.windowSize(i,1), setup.instantaneous.windowSize(i,2));
-            saveas(fig, fullfile(sample_frame_dir, [enhanced_base, '.fig']));
-            saveas(fig, fullfile(sample_frame_dir, [enhanced_base, '.png']));
-            saveas(fig, fullfile(sample_frame_dir, [enhanced_base, '.eps']));
-            close(fig);
-            
-        catch ME
-            fprintf('Warning: Could not create sample frame: %s\n', ME.message);
-        end
     end
     
     fprintf('Pressure video generation completed at %s\n', datetime('now'));

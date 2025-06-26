@@ -1,16 +1,20 @@
-function Vortex_video_gamma(setup, endpoint, CameraNo, type, use_merged)
+function Vortex_video_gamma(setup, endpoint, CameraNo, type, use_merged, acq_freq)
 % VORTEX_VIDEO_GAMMA - Function to create vortex visualization video
 %   This function generates a video showing instantaneous vorticity with gamma1 contour overlays
 %
-%   Usage: Vortex_video_gamma(setup, endpoint, CameraNo, type, use_merged)
+%   Usage: Vortex_video_gamma(setup, endpoint, CameraNo, type, use_merged, acq_freq)
 %   type: 'Instantaneous', 'Calibrated', or 'Merged'
 %   use_merged: true for merged data, false for traditional camera data
+%   acq_freq: acquisition frequency in Hz
 
 if nargin < 4
     type = 'Instantaneous'; % Default for backward compatibility
 end
 if nargin < 5
     use_merged = false; % Default to traditional camera data
+end
+if nargin < 6
+    error('Acquisition frequency (acq_freq) must be provided.');
 end
 
 if setup.pipeline.vortex_video_gamma
@@ -48,7 +52,7 @@ if setup.pipeline.vortex_video_gamma
         
         % Pre-calculate vorticity limits for consistent colorbar scaling
         fprintf('Calculating vorticity limits for consistent scaling...\n');
-        sample_frames = 1:50:setup.imProperties.imageCount; % Sample every 50th frame
+        sample_frames = 1:50; 
         all_vorticity_values = [];
         
         for sample_idx = 1:length(sample_frames)
@@ -92,19 +96,15 @@ if setup.pipeline.vortex_video_gamma
         open(v);
         
         % Process each frame
-        for imNo = 1:setup.imProperties.imageCount
+        for imNo = 1:setup.imProperties.caseImages
             % Load velocity data
             VelData = load(fullfile(dataloc, sprintf('%05d.mat', imNo)));
-            u = VelData.piv_result(i).ux;
+            u_vel = VelData.piv_result(i).ux;
             v_vel = VelData.piv_result(i).uy;
             
-            % Apply spatial smoothing to reduce noise
-            % Option 1: Gaussian smoothing
-            sigma = 1; % Adjust smoothing strength (higher = more smoothing)
-%             u_smooth = imgaussfilt(u, sigma, 'FilterDomain', 'spatial');
-%             v_smooth = imgaussfilt(v_vel, sigma, 'FilterDomain', 'spatial');
-            u_smooth = u;
-            v_smooth = v;
+           
+            u_smooth = u_vel;
+            v_smooth = v_vel;
             
             
             % Apply mask to smoothed data
@@ -133,6 +133,8 @@ if setup.pipeline.vortex_video_gamma
                           vort_lower_limit, vort_upper_limit, true);
             
             set(fig, 'Visible', 'off');
+            set(fig, 'Units', 'Normalized', 'OuterPosition', [0, 0.04, 1, 0.96]);
+
             
             % Get current axes and add gamma1 contours
             ax = gca;
@@ -165,10 +167,10 @@ if setup.pipeline.vortex_video_gamma
                    'Color', 'white', 'LineWidth', 1.2, 'MaxHeadSize', 0.3, ...
                    'AutoScale', 'off');
             
-%             % Update title with frame information
-%             title(ax, sprintf('Instantaneous Vorticity with $\\Gamma_1$ Contours and Vectors\\nFrame %d/%d, Run %d', ...
-%                          imNo, setup.imProperties.imageCount, i), ...
-%                   'Interpreter', 'latex', 'FontSize', setup.figures.titleFontSize);
+            % Add time to title
+            time_s = (imNo - 1) / acq_freq;
+            title(ax, sprintf('Vorticity with Gamma Contours, Time: %.3fs', time_s), ...
+                  'Interpreter', 'latex', 'FontSize', setup.figures.titleFontSize);
             
             % Add xlabel and ylabel
             xlabel(ax, 'x [mm]', 'Interpreter', 'latex', 'FontSize', setup.figures.labelFontSize);
@@ -200,7 +202,7 @@ if setup.pipeline.vortex_video_gamma
             
             % Progress indicator
             if mod(imNo, 10) == 0
-                fprintf('Processed frame %d/%d\n', imNo, setup.imProperties.imageCount);
+                fprintf('Processed frame %d/%d\n', imNo, setup.imProperties.caseImages);
             end
         end
         
@@ -208,65 +210,7 @@ if setup.pipeline.vortex_video_gamma
         close(v);
         fprintf('Video saved: %s\n', video_filename);
         
-        % Create a sample frame for reference using the same approach
-        sample_frame_dir = fullfile(output_dir, 'Sample_Frames');
-        if ~exist(sample_frame_dir, 'dir')
-            mkdir(sample_frame_dir);
-        end
-        
-        mid_frame = round(setup.imProperties.imageCount / 2);
-        VelData = load(fullfile(dataloc, sprintf('%05d.mat', mid_frame)));
-        u = VelData.piv_result(i).ux;
-        v_vel = VelData.piv_result(i).uy;
-        
-        [dvx, ~] = gradient(v_vel);
-        [~, duy] = gradient(u);
-        duy = -duy;
-        vorticity = dvx./dx - duy./dy;
-        gammaField = gamma1(x, y, u, v_vel, 10);
-        gammaField(b_mask) = 0;
-        
-        % Create sample frame using traditional save method
-        sample_variableName = sprintf('SampleFrame_Run%d', i);
-        
-        plot_save_mask(vorticity, b_mask, xcorners, ycorners, ...
-                      setup.figures.axisFontSize, setup.figures.titleFontSize, ...
-                      sample_frame_dir, setup.instantaneous.runs, ...
-                      [setup.instantaneous.windowSize(i,1), setup.instantaneous.windowSize(i,2)], ...
-                      i, sample_variableName, 'Inst', sample_frame_dir, ...
-                      vort_lower_limit, vort_upper_limit);
-        
-        % Load and enhance sample frame with gamma1 contours
-        sample_fig_filename = fullfile(sample_frame_dir, [sample_variableName, num2str(setup.instantaneous.windowSize(i,1)), 'x', num2str(setup.instantaneous.windowSize(i,2)), '.fig']);
-        fig = openfig(sample_fig_filename);
-        ax = gca;
-        hold(ax, 'on');
-        
-        [C_pos, h_pos] = contour(ax, x, y, gammaField, [0.5, 1, 2], 'LineWidth', 2, 'LineStyle', '-');
-        [C_neg, h_neg] = contour(ax, x, y, gammaField, [-2, -1, -0.5], 'LineWidth', 2, 'LineStyle', '--');
-        h_pos.LineColor = 'yellow';
-        h_neg.LineColor = 'cyan';
-        
-%         title(ax, sprintf('Sample Frame: Instantaneous Vorticity with $\\Gamma_1$ Contours\\nFrame %d, Run %d', ...
-%                      mid_frame, i), ...
-%               'Interpreter', 'latex', 'FontSize', setup.figures.titleFontSize);
-        
-        xlabel(ax, 'x [mm]', 'Interpreter', 'latex', 'FontSize', setup.figures.labelFontSize);
-        ylabel(ax, 'y [mm]', 'Interpreter', 'latex', 'FontSize', setup.figures.labelFontSize);
-        
-        cb = colorbar(ax);
-        cb.Label.String = 'Vorticity [1/s]';
-        cb.Label.Interpreter = 'latex';
-        cb.Label.FontSize = setup.figures.labelFontSize;
-        
-        hold(ax, 'off');
-        
-        % Save enhanced sample frame with safe filename
-        enhanced_base = sprintf('SampleFrame_Run%d_%dx%d_enhanced', i, setup.instantaneous.windowSize(i,1), setup.instantaneous.windowSize(i,2));
-        saveas(fig, fullfile(sample_frame_dir, [enhanced_base, '.fig']));
-        saveas(fig, fullfile(sample_frame_dir, [enhanced_base, '.png']));
-        saveas(fig, fullfile(sample_frame_dir, [enhanced_base, '.eps']));
-        close(fig);
+       
     end
     
     fprintf('Vortex video generation completed at %s\n', datetime('now'));

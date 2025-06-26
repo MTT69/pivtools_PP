@@ -17,31 +17,25 @@ function paths = get_data_paths(setup, type, endpoint, CameraNo, use_merged)
     
     if use_merged
         % Merged data structure: Merged/type/endpoint/
-        if isempty(endpoint)
-            paths.data_dir = fullfile(base_dir, 'Merged', type);
-            paths.stats_dir = fullfile(base_dir, 'Statistics', 'Merged', type);
-        else
-            paths.data_dir = fullfile(base_dir, 'Merged', type, endpoint);
-            paths.stats_dir = fullfile(base_dir, 'Statistics', 'Merged', type, endpoint);
-        end
-        paths.pressure_dir = fullfile(paths.data_dir, 'Pressure');
-        paths.video_dir = fullfile(base_dir, 'Videos', 'Merged', type);
+       
+        paths.data_dir = fullfile(base_dir, 'Merged', type, endpoint);
+        paths.stats_dir = fullfile(base_dir, 'Statistics', 'Merged', type, endpoint);
+        
+        paths.pressure_dir = fullfile(paths.data_dir, 'Pressure',endpoint);
+        paths.video_dir = fullfile(base_dir, 'Videos', 'Merged', type, ednpoint);
         
     else
         % Traditional camera data structure: CalibratedPIV/imageCount/CamX/type/endpoint/
-        if isempty(endpoint)
-            paths.data_dir = fullfile(base_dir, 'CalibratedPIV', num2str(setup.imProperties.imageCount), ...
-                                     ['Cam', num2str(CameraNo)], type);
-        else
-            paths.data_dir = fullfile(base_dir, 'CalibratedPIV', num2str(setup.imProperties.imageCount), ...
+       
+        paths.data_dir = fullfile(base_dir, 'CalibratedPIV', num2str(setup.imProperties.imageCount), ...
                                      ['Cam', num2str(CameraNo)], type, endpoint);
-        end
+        
         
         % Statistics always go to Calibrated subdirectory for traditional data
         paths.stats_dir = fullfile(base_dir, 'Statistics', num2str(setup.imProperties.imageCount), ...
-                                  ['Cam', num2str(CameraNo)], type, 'Calibrated');
-        paths.pressure_dir = fullfile(paths.data_dir, 'Pressure');
+            ['Cam', num2str(CameraNo)], type, endpoint);
+        paths.pressure_dir = fullfile(paths.data_dir, 'Pressure',endpoint);
         paths.video_dir = fullfile(base_dir, 'Videos', num2str(setup.imProperties.imageCount), ...
-                                  ['Cam', num2str(CameraNo)]);
+            ['Cam', num2str(CameraNo)],endpoint);
     end
 end
